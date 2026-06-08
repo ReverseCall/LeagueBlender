@@ -45,7 +45,7 @@ It is worth noting that not all features present in the original project have be
 
 ### 1. Download the Plugin
 
-To get the latest version of LeagueBlender, [click here to download](https://link_:3).
+To get the latest version of LeagueBlender, [click here to download](https://github.com/ReverseCall/LeagueBlender/releases/latest).
 
 ### 2. Install in Blender
 

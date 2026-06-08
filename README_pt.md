@@ -46,7 +46,7 @@ LeagueBlender só se tornou possível graças ao projeto já existente [lol_maya
 
 ### 1. Baixe o Plugin
 
-Para obter a versão mais recente do LeagueBlender, [clique aqui para baixar](https://link_:3).
+Para obter a versão mais recente do LeagueBlender, [clique aqui para baixar](https://github.com/ReverseCall/LeagueBlender/releases/latest).
 
 ### 2. Instale no Blender
 
