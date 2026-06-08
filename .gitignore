@@ -1,0 +1,29 @@
+# Python
+# =========
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+# ----------------------
+venv/
+
+# vs code
+# ----------
+.vscode/
+informações.txt
+
+# Blender
+# ----------
+teste/
+Verções/
+
+# Bibliotecas
+# --------------
+bibliotecas_developer.txt
+PESSOA.txt
+
+# Refatorando
+# --------------
+importers/import_anim.py
