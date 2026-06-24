@@ -1,7 +1,3 @@
-"""
-Operador Blender para importar SKL + SKN do League of Legends
-"""
-
 import os
 import bpy
 import mathutils
@@ -9,18 +5,19 @@ from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, FloatProperty
 
+from ..i18n import t
+from ..formats.skn import read_skn
 from ..preferences import get_prefs
 from ..formats.skl import read_skl, SKLFile
-from ..formats.skn import read_skn, SKNFile
-from ..importers.import_skn import build_mesh
 from ..utils.bone_shape import apply_bone_shapes, BoneShapeType
+from ..importers.import_skn import build_mesh, build_submesh_objects
 from ..utils.scene_setup import apply_clip_end_on_first_import, mark_imported
 
 
 # Construtor do armature
 # =========================
 
-def build_armature(skl: SKLFile, name: str) -> bpy.types.Object:
+def build_armature(skl: SKLFile, name: str, collection: bpy.types.Collection | None = None) -> bpy.types.Object:
     """
     Constroi o Armature a partir de um SKLFile ja flipado.
 
@@ -48,7 +45,8 @@ def build_armature(skl: SKLFile, name: str) -> bpy.types.Object:
     arm_obj.show_in_front = False
     arm_data.display_type = 'STICK'
 
-    bpy.context.collection.objects.link(arm_obj)
+    target_collection = collection if collection is not None else bpy.context.collection
+    target_collection.objects.link(arm_obj)
     bpy.context.view_layer.objects.active = arm_obj
     bpy.ops.object.mode_set(mode = 'EDIT')
 
@@ -136,7 +134,7 @@ def apply_skinning(
     mesh_obj: bpy.types.Object,
     arm_obj: bpy.types.Object,
     skl: SKLFile,
-    skn: SKNFile,
+    vertices: list,
 ):
     """
     Aplica pesos seguindo a logica do LBV9_2025
@@ -150,7 +148,7 @@ def apply_skinning(
 
     use_map = len(skl.influences) > 0
 
-    for v_idx, v in enumerate(skn.vertices):
+    for v_idx, v in enumerate(vertices):
         for i in range(4):
             weight = v.weights[i]
             if weight > 0.001:
@@ -182,11 +180,8 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
 
     # Importa Skeleton + Mesh (.skl + .skn) do LoL
     bl_idname = "leagueblender.import_skl"
-    bl_label = "League Skeleton (.skl)"
-    bl_description = (
-        "Importa Skeleton (.skl) + Mesh (.skn) do League of Legends. "
-        "O .skn deve ter o mesmo nome e estar na mesma pasta."
-    )
+    bl_label = t("op_import_skl_label")
+    bl_description = t("op_import_skl_desc")
     bl_options = {'REGISTER', 'UNDO'}
 
     filename_ext = ".skl"
@@ -196,52 +191,52 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
     # ------------------------------------------------------------------------
 
     skl_bone_shape: EnumProperty(
-        name="Bone Shape",
-        description="Forma visual dos ossos ao importar o Skeleton",
+        name=t("prop_skl_bone_shape_name"),
+        description=t("prop_skl_bone_shape_desc"),
         items=[
-            ('BLENDER', "Blender (Stick)", "Forma padrão do Blender"),
-            ('SPHERE',  "Sphere (wire)",   "Esfera wire estilo glTF"),
+            ('BLENDER', t("prop_skl_bone_shape_blender_name"), t("prop_skl_bone_shape_blender_desc")),
+            ('SPHERE',  t("prop_skl_bone_shape_sphere_name"),  t("prop_skl_bone_shape_sphere_desc")),
         ],
         default='BLENDER',
     )
 
     skl_show_in_front: BoolProperty(
-        name="Show In Front",
-        description="Desenha o armature sobre outros objetos (opção In Front)",
+        name=t("prop_skl_show_in_front_name"),
+        description=t("prop_skl_show_in_front_desc"),
         default=True,
     )
 
     skl_only: BoolProperty(
-        name="Import SKL Only",
-        description="Importa apenas o Skeleton, sem carregar o SKN",
+        name=t("prop_skl_only_name"),
+        description=t("prop_skl_only_desc"),
         default=False,
     )
 
     skn_mesh_format: EnumProperty(
-        name="Mesh Topology",
-        description="Mantem triangulos ou converte para quads",
+        name=t("prop_skn_mesh_format_name"),
+        description=t("prop_skn_mesh_format_desc"),
         items=[
-            ('TRIS',  "Triangles (Default)", "Mantem a topologia original em triangulos"),
-            ('QUADS', "Quads (Tris to Quads)", "Tenta converter triangulos em quads"),
+            ('TRIS',  t("prop_skn_mesh_format_tris_name"),  t("prop_skn_mesh_format_tris_desc")),
+            ('QUADS', t("prop_skn_mesh_format_quads_name"), t("prop_skn_mesh_format_quads_desc")),
         ],
         default='TRIS',
     )
 
     skn_apply_seams: BoolProperty(
-        name="Rebuild Seam (BETA)",
-        description="Detecta e marca UV seams automaticamente ao importar",
+        name=t("prop_skn_apply_seams_name"),
+        description=t("prop_skn_apply_seams_desc"),
         default=False,
     )
 
     skn_merge_by_distance: BoolProperty(
-        name="Merge by Distance",
-        description="Faz Merge > By Distance nos vertices apos importar",
+        name=t("prop_skn_merge_by_distance_name"),
+        description=t("prop_skn_merge_by_distance_desc"),
         default=False,
     )
 
     skn_merge_threshold: FloatProperty(
-        name="Distance",
-        description="Distancia maxima para considerar dois vertices como duplicados",
+        name=t("prop_skn_merge_threshold_name"),
+        description=t("prop_skn_merge_threshold_desc"),
         default=0.001,
         min=0.00001,
         max=0.1,
@@ -251,9 +246,15 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
     )
 
     skn_default_material_color: BoolProperty(
-        name="Gray Mesh by Default",
-        description="Aplica a cor cinza padrão do LeagueBlender aos materiais criados",
+        name=t("prop_skn_default_material_color_name"),
+        description=t("prop_skn_default_material_color_desc"),
         default=True,
+    )
+
+    skn_import_as_collection: BoolProperty(
+        name=t("prop_skn_import_as_collection_name"),
+        description=t("prop_skn_import_as_collection_desc_skl"),
+        default=False,
     )
 
     def draw(self, _context):
@@ -263,13 +264,13 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        col = layout.column(heading = "SKL Options")
+        col = layout.column(heading = t("ui_skl_options"))
         col.prop(self, "skl_bone_shape")
         col.prop(self, "skl_show_in_front")
         col.prop(self, "skl_only")
 
         col.separator()
-        col.label(text = "SKN Options")
+        col.label(text = t("ui_skn_options"))
 
         # SKN options ficam desabilitadas quando so importa SKL
         skn_col = col.column()
@@ -279,13 +280,20 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
         skn_col.prop(self, "skn_apply_seams")
 
         col.separator()
-        col.prop(self, "skn_merge_by_distance")
+        col.prop(self, "skn_import_as_collection")
+
+        col.separator()
+        row = col.row()
+
+        # Merge by Distance não se aplica quando cada submesh vira um objeto separado
+        row.enabled = not self.skn_import_as_collection
+        row.prop(self, "skn_merge_by_distance")
         sub = col.row()
-        sub.enabled = self.skn_merge_by_distance and not self.skl_only
+        sub.enabled = self.skn_merge_by_distance and not self.skl_only and not self.skn_import_as_collection
         sub.prop(self, "skn_merge_threshold")
 
         col.separator()
-        col.label(text = "Defaults via Addon Preferences", icon = 'PREFERENCES')
+        col.label(text = t("ui_defaults_via_prefs"), icon = 'PREFERENCES')
 
     def invoke(self, context, event):
         
@@ -298,6 +306,7 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
         self.skn_merge_by_distance = prefs.skn_merge_by_distance
         self.skn_merge_threshold = prefs.skn_merge_threshold
         self.skn_default_material_color = prefs.skn_default_material_color
+        self.skn_import_as_collection = prefs.skn_import_as_collection
         return super().invoke(context, event)
 
     def execute(self, context):
@@ -310,7 +319,7 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
         try:
             skl = read_skl(skl_path)
         except Exception as e:
-            self.report({'ERROR'}, f"Error in SKL parsing: {e}")
+            self.report({'ERROR'}, t("msg_skl_parse_error", e))
             return {'CANCELLED'}
 
         skl.flip()
@@ -318,11 +327,84 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
         # Aplica Clip End no primeiro import (antes de criar qualquer objeto)
         apply_clip_end_on_first_import(context)
 
+        # ___ Modo Collection ___
+        if self.skn_import_as_collection:
+            try:
+                arm_obj = build_armature(skl, name + "_Armature")
+            except Exception as e:
+                self.report({'ERROR'}, t("msg_armature_create_error", e))
+                return {'CANCELLED'}
+
+            mark_imported(arm_obj)
+            arm_obj["lol_influences"] = list(skl.influences)
+            arm_obj.show_in_front = self.skl_show_in_front
+            apply_bone_shapes(arm_obj, BoneShapeType(self.skl_bone_shape))
+
+            if self.skl_only:
+                bpy.ops.object.select_all(action = 'DESELECT')
+                arm_obj.select_set(True)
+                context.view_layer.objects.active = arm_obj
+
+                self.report({'INFO'}, t("msg_skl_imported_container", name, len(skl.joints)))
+                return {'FINISHED'}
+
+            if not os.path.isfile(skn_path):
+                self.report({'ERROR'}, t("msg_skn_not_found", skn_path))
+                return {'CANCELLED'}
+
+            try:
+                skn = read_skn(skn_path)
+            except Exception as e:
+                self.report({'ERROR'}, t("msg_skn_parse_error", e))
+                return {'CANCELLED'}
+
+            skn.flip()
+
+            try:
+                mesh_objs = build_submesh_objects(
+                    skn,
+                    apply_weights = False,
+                    mesh_format = self.skn_mesh_format,
+                    apply_seams = self.skn_apply_seams,
+                    use_gray_material = self.skn_default_material_color,
+                )
+            except Exception as e:
+                self.report({'ERROR'}, t("msg_mesh_create_error", e))
+                return {'CANCELLED'}
+
+            bpy.ops.object.select_all(action = 'DESELECT')
+            for sm, mesh_obj in zip(skn.submeshes, mesh_objs):
+                context.collection.objects.link(mesh_obj)
+                mark_imported(mesh_obj)
+
+                # Fatia skn.vertices
+                local_verts = skn.vertices[sm.start_vertex : sm.start_vertex + sm.vertex_count]
+                try:
+                    apply_skinning(mesh_obj, arm_obj, skl, local_verts)
+                except Exception as e:
+                    self.report({'ERROR'}, t("msg_skinning_error_named", mesh_obj.name, e))
+
+                mesh_obj.select_set(True)
+
+            # Merge by Distance não e usado em submesh
+
+            arm_obj.select_set(True)
+            context.view_layer.objects.active = arm_obj
+
+            self.report({'INFO'}, t(
+                "msg_imported_container",
+                name,
+                len(skl.joints),
+                len(skn.vertices),
+                len(mesh_objs),
+            ))
+            return {'FINISHED'}
+
         # ___ Armature ___
         try:
             arm_obj = build_armature(skl, name + "_Armature")
         except Exception as e:
-            self.report({'ERROR'}, f"Error creating armature: {e}")
+            self.report({'ERROR'}, t("msg_armature_create_error", e))
             return {'CANCELLED'}
 
         mark_imported(arm_obj)
@@ -339,16 +421,13 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
         # SKN (opcional)
         if not self.skl_only:
             if not os.path.isfile(skn_path):
-                self.report({'ERROR'},
-                    f"SKN not found: {skn_path}\n"
-                    ".skn must be in the same folder with the same name as .skl."
-                )
+                self.report({'ERROR'}, t("msg_skn_not_found", skn_path))
                 return {'CANCELLED'}
 
             try:
                 skn = read_skn(skn_path)
             except Exception as e:
-                self.report({'ERROR'}, f"Error in SKN parsing: {e}")
+                self.report({'ERROR'}, t("msg_skn_parse_error", e))
                 return {'CANCELLED'}
 
             skn.flip()
@@ -365,13 +444,13 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
                 context.collection.objects.link(mesh_obj)
                 mark_imported(mesh_obj)
             except Exception as e:
-                self.report({'ERROR'}, f"Error creating mesh: {e}")
+                self.report({'ERROR'}, t("msg_mesh_create_error", e))
                 return {'CANCELLED'}
 
             try:
-                apply_skinning(mesh_obj, arm_obj, skl, skn)
+                apply_skinning(mesh_obj, arm_obj, skl, skn.vertices)
             except Exception as e:
-                self.report({'ERROR'}, f"Error in skinning: {e}")
+                self.report({'ERROR'}, t("msg_skinning_error", e))
 
             if self.skn_merge_by_distance:
                 from ..utils.mesh_utils import merge_by_distance
@@ -382,18 +461,13 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
             mesh_obj.select_set(True)
             context.view_layer.objects.active = arm_obj
 
-            self.report({'INFO'},
-                f"Importado: {name} - "
-                f"{len(skl.joints)} joints, "
-                f"{len(skn.vertices):,} verts"
-            )
+            self.report({'INFO'}, t("msg_imported_full", name, len(skl.joints), len(skn.vertices)))
         else:
             bpy.ops.object.select_all(action = 'DESELECT')
             arm_obj.select_set(True)
             context.view_layer.objects.active = arm_obj
 
-            self.report({'INFO'},
-                f"SKL importado: {name} - {len(skl.joints)} joints"
-            )
+            self.report({'INFO'}, t("msg_skl_imported", name, len(skl.joints)))
 
         return {'FINISHED'}
+    

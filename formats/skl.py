@@ -206,7 +206,7 @@ def elf_hash(s: str) -> int:
 # Serialização binaria
 # ----------------------
 
-def write_skl_binary_modern(joints: list, influences: list, path: str):
+def write_skl_binary(joints: list, influences: list, path: str):
 
     # Escreve o SKL no formato magic = 0x22FD4FC3, version = 0
     n = len(joints)

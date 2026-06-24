@@ -1,10 +1,15 @@
+import os
 import bpy
 import bmesh
+
 from bpy.types import Operator
 from bpy.props import StringProperty
 from bpy_extras.io_utils import ExportHelper
 
-from ..formats.skn import write_skn_binary_v1
+from ..i18n import t
+from ..formats.skn import write_skn_binary
+from .export_skl import dump_skl_from_armature
+from ..formats.skl import write_skl_binary
 
 # UV fora da janela
 _UV_STUB_X = -10.0
@@ -13,55 +18,45 @@ _UV_STUB_X = -10.0
 # Mapeamento de bones
 # ======================
 
-def _build_bone_to_idx(mesh_obj: bpy.types.Object) -> dict:
+def _build_bone_to_idx(arm_obj: bpy.types.Object) -> dict:
 
-    # Reconstroi o mapeamento inverso
-    arm_obj = None
-    for mod in mesh_obj.modifiers:
-        if mod.type == 'ARMATURE' and mod.object:
-            arm_obj = mod.object
-            break
+    # Agora arm_obj sempre existe
+    arm_bones = list(arm_obj.data.bones)
 
-    if arm_obj:
-        arm_bones = list(arm_obj.data.bones)
+    # Ordena por lol_id se disponivel
+    has_lol_id = all("lol_id" in b for b in arm_bones)
+    if has_lol_id:
+        arm_bones.sort(key=lambda b: int(b["lol_id"]))
 
-        # Ordena por lol_id se disponivel
-        has_lol_id = all("lol_id" in b for b in arm_bones)
-        if has_lol_id:
-            arm_bones.sort(key=lambda b: int(b["lol_id"]))
+    real_id_map = {b.name: i for i, b in enumerate(arm_bones)}
 
-        real_id_map = {b.name: i for i, b in enumerate(arm_bones)}
+    raw_influences = arm_obj.get("lol_influences")
+    if raw_influences and len(raw_influences) > 0:
+        real_to_raw = {}
+        for raw_id, real_id in enumerate(raw_influences):
 
-        raw_influences = arm_obj.get("lol_influences")
-        if raw_influences and len(raw_influences) > 0:
-            real_to_raw = {}
-            for raw_id, real_id in enumerate(raw_influences):
+            # Mantem so o primeiro raw_id para cada real_id
+            if real_id not in real_to_raw:
+                real_to_raw[real_id] = raw_id
 
-                # Mantem so o primeiro raw_id para cada real_id
-                if real_id not in real_to_raw:
-                    real_to_raw[real_id] = raw_id
+        bone_to_raw = {}
+        for name, real_id in real_id_map.items():
+            if real_id in real_to_raw:
+                bone_to_raw[name] = real_to_raw[real_id]
+            else:
 
-            bone_to_raw = {}
-            for name, real_id in real_id_map.items():
-                if real_id in real_to_raw:
-                    bone_to_raw[name] = real_to_raw[real_id]
-                else:
-                    
-                    # Joint fora da tabela influences. usa real_id como fallback
-                    bone_to_raw[name] = real_id
-            return bone_to_raw
-        else:
+                # Joint fora da tabela influences. usa real_id como fallback
+                bone_to_raw[name] = real_id
+        return bone_to_raw
+    else:
 
-            # Sem tabela de remapeamento. raw_id == real_id
-            return real_id_map
-
-    # Fallback: sem armature, usa a ordem dos vertex groups
-    return {vg.name: i for i, vg in enumerate(mesh_obj.vertex_groups)}
+        # Sem tabela de remapeamento. raw_id == real_id
+        return real_id_map
 
 
 def _get_vertex_weights(v_idx: int, mesh_obj: bpy.types.Object, bone_to_idx: dict):
 
-    # Mantem os 4 pesos mais altos, normaliza e empacota como bytes + floats
+    # Mantem os 4 pesos mais altos, normaliza e empacota como bytes + floats | Nota: Melhore isso no futuro.
     vert = mesh_obj.data.vertices[v_idx]
     valid_groups = []
     for g in vert.groups:
@@ -88,13 +83,156 @@ def _get_vertex_weights(v_idx: int, mesh_obj: bpy.types.Object, bone_to_idx: dic
     return bytes(influences), tuple(weights)
 
 
+# Validações de pre-exportação
+# -------------------------------
+
+# Limite de nome de material no formato SKN
+_MAX_MATERIAL_NAME_LEN = 63
+
+
+def _enforce_material_name_limit(mesh_obj: bpy.types.Object, warnings: list) -> None:
+
+    # Corrige nomes de materias maiores que 63 e renomeia o material original e UV layer
+    for slot in mesh_obj.material_slots:
+        mat = slot.material
+        if mat is None:
+            continue
+
+        if len(mat.name) <= _MAX_MATERIAL_NAME_LEN:
+            continue
+
+        old_name = mat.name
+        new_name = old_name[:_MAX_MATERIAL_NAME_LEN]
+
+        # Evita colisao com outro material/datablock que ja tenha esse nome truncado
+        if new_name in bpy.data.materials and bpy.data.materials[new_name] != mat:
+            mat.name = new_name  # bpy resolve o conflito sozinho
+        else:
+            mat.name = new_name
+
+        warnings.append(t("msg_material_renamed", old_name, len(old_name), _MAX_MATERIAL_NAME_LEN, mat.name))
+
+
+def _sync_uv_layer_names(mesh_obj: bpy.types.Object, warnings: list) -> tuple[bool, str]:
+
+    # ___ Tratamento UV layers ___
+    materials = [slot.material for slot in mesh_obj.material_slots if slot.material is not None]
+    uv_layers = mesh_obj.data.uv_layers
+
+    if len(uv_layers) == 0:
+        return True, ""
+
+    """
+    Caso simples: 1 material, 1 UV layer
+    Renomeia sempre, mesmo que a UV ja tenha um nome "valido" diferente
+    """
+    if len(materials) == 1 and len(uv_layers) == 1:
+        mat = materials[0]
+        uv = uv_layers[0]
+        if uv.name != mat.name:
+            old_uv_name = uv.name
+            uv.name = mat.name
+            warnings.append(t("msg_uv_renamed", old_uv_name, mat.name, mesh_obj.name))
+        return True, ""
+
+    if len(uv_layers) <= 1:
+        return True, ""
+
+    # Caso multi-material + multi-UV
+    uv_names = {uv.name for uv in uv_layers}
+    mat_names = {mat.name for mat in materials}
+
+    orphan_materials = [mat for mat in materials if mat.name not in uv_names]
+    leftover_uvs = [uv for uv in uv_layers if uv.name not in mat_names]
+
+    if not orphan_materials:
+
+        # Todo material ja tem UV
+        return True, ""
+
+    if len(orphan_materials) == 1 and len(leftover_uvs) == 1:
+
+        # Unico par possivel -> renomeia por eliminação
+        mat = orphan_materials[0]
+        uv = leftover_uvs[0]
+        old_uv_name = uv.name
+        uv.name = mat.name
+        warnings.append(t("msg_uv_renamed_elimination", old_uv_name, mat.name, mesh_obj.name))
+        return True, ""
+
+    # Bloqueio de exportação caso muitas UVs estiverem erradas
+    orphan_names = ", ".join(f"\"{m.name}\"" for m in orphan_materials)
+    leftover_names = ", ".join(f"\"{u.name}\"" for u in leftover_uvs) if leftover_uvs else t("msg_no_leftover_uvs")
+    return False, t("msg_uv_ambiguous", mesh_obj.name, orphan_names, leftover_names)
+
+
+def _validate_mesh_for_export(mesh_obj: bpy.types.Object) -> tuple[bool, str]:
+
+    arm_obj = None
+    for mod in mesh_obj.modifiers:
+        if mod.type == 'ARMATURE' and mod.object:
+            arm_obj = mod.object
+            break
+
+    if arm_obj is None:
+        return False, t("msg_export_no_armature", mesh_obj.name)
+
+    # Verificação de materiais para evitar erros
+    if len(mesh_obj.material_slots) == 0:
+        return False, t("msg_export_no_material", mesh_obj.name)
+
+    for i, slot in enumerate(mesh_obj.material_slots):
+        if slot.material is None:
+            return False, t("msg_export_empty_material_slot", mesh_obj.name, i)
+
+    return True, ""
+
+
+# Reconhecimento de submeshes por armature
+# --------------------------------------------
+
+def _find_meshes_for_armature(arm_obj: bpy.types.Object, context) -> list:
+
+    # tratamento de doda sas meshs com armatures para união em um unico arquivo
+    meshes = []
+    for obj in context.scene.objects:
+        if obj.type != 'MESH':
+            continue
+        for mod in obj.modifiers:
+            if mod.type == 'ARMATURE' and mod.object == arm_obj:
+                meshes.append(obj)
+                break
+
+    meshes.sort(key=lambda o: o.name)
+    return meshes
+
+
+# Merge de submeshes por nome
+# ------------------------------
+
+def _merge_submeshes_by_name(submeshes: list) -> list:
+
+    # Une submeshes com o mesmo nome em uma unica entrada
+    merged = {}
+    merged_order = []
+
+    for sm in submeshes:
+        name = sm["name"]
+        if name not in merged:
+            merged[name] = {"name": name, "verts": [], "indices": []}
+            merged_order.append(name)
+
+        offset = len(merged[name]["verts"])
+        merged[name]["verts"].extend(sm["verts"])
+        merged[name]["indices"].extend(idx + offset for idx in sm["indices"])
+
+    return [merged[name] for name in merged_order]
+
+
 # Extração da Mesh
-# ------------------
+# -------------------
 
-def dump_skn_from_mesh(mesh_obj: bpy.types.Object) -> list:
-
-    # Conversão de coordenadas e normais (Blender para LoL)
-    bone_to_idx = _build_bone_to_idx(mesh_obj)
+def dump_skn_from_mesh(mesh_obj: bpy.types.Object, bone_to_idx: dict) -> list:
 
     # ___ Triangulação ___
     bm = bmesh.new()
@@ -116,7 +254,7 @@ def dump_skn_from_mesh(mesh_obj: bpy.types.Object) -> list:
         mat_idx = min(poly.material_index, num_materials - 1)
 
         loop_indices = list(poly.loop_indices)
-        
+
         """
         Inverte a winding order (Blender -> LoL)
         Checa se os 3 vertices são distintos antes de inverter
@@ -137,11 +275,7 @@ def dump_skn_from_mesh(mesh_obj: bpy.types.Object) -> list:
 
             # Prefere corner_normals sobre loop.normal
             corner_normal = temp_mesh.corner_normals[loop_idx].vector
-            normal = (
-                corner_normal.x,
-                corner_normal.y,
-                corner_normal.z,
-            )
+            normal = (corner_normal.x, corner_normal.y, corner_normal.z)
 
             # ___ Remontagem de UV ___
             # Prioridade. layer com o nome do material -> qualquer layer valida -> layer 0
@@ -206,22 +340,8 @@ def dump_skn_from_mesh(mesh_obj: bpy.types.Object) -> list:
     for i in range(num_materials):
         if not submesh_verts[i]:
             continue
-        name = (mesh_obj.material_slots[i].material.name[:63] if mesh_obj.material_slots[i].material else f"mat_{i}")
+        name = (mesh_obj.material_slots[i].material.name if mesh_obj.material_slots[i].material else f"mat_{i}")
         submeshes.append({"name": name, "verts": submesh_verts[i], "indices": submesh_indices[i]})
-
-    # Limite de submeshes
-    submesh_count = len(submeshes)
-    if submesh_count > 32:
-        raise ValueError(
-            f"[SKN.dump({mesh_obj.name})]: Too many materials assigned: {submesh_count}, max allowed: 32 materials."
-        )
-
-    # Limite de vertices
-    total_verts = sum(len(sm["verts"]) for sm in submeshes)
-    if total_verts > 65535:
-        raise ValueError(
-            f"[SKN.dump({mesh_obj.name})]: Too many vertices found: {total_verts}, max allowed: 65535 vertices."
-        )
 
     return submeshes
 
@@ -231,23 +351,89 @@ def dump_skn_from_mesh(mesh_obj: bpy.types.Object) -> list:
 
 class LEAGUEBLENDER_OT_export_skn(Operator, ExportHelper):
     bl_idname = "leagueblender.export_skn"
-    bl_label = "League Mesh (.skn)"
+    bl_label = t("op_export_skn_label")
     filename_ext = ".skn"
     filter_glob: StringProperty(default="*.skn", options={'HIDDEN'})
 
     def execute(self, context):
         mesh_obj = context.active_object
         if not mesh_obj or mesh_obj.type != 'MESH':
-            self.report({'ERROR'}, "Select an object of type MESH before exporting.")
+            self.report({'ERROR'}, t("msg_export_select_mesh"))
             return {'CANCELLED'}
 
+        # Verificações basicas antes de triangular uma mesh
+        ok, err = _validate_mesh_for_export(mesh_obj)
+        if not ok:
+            self.report({'ERROR'}, err)
+            return {'CANCELLED'}
+
+        # Pega o armature vinculado
+        arm_obj = next(
+            mod.object for mod in mesh_obj.modifiers
+            if mod.type == 'ARMATURE' and mod.object
+        )
+
+        # Outras meshes vinculadas ao mesmo armature entram como submeshes
+        mesh_objs = _find_meshes_for_armature(arm_obj, context)
+        for obj in mesh_objs:
+            ok, err = _validate_mesh_for_export(obj)
+            if not ok:
+                self.report({'ERROR'}, err)
+                return {'CANCELLED'}
+
         try:
-            submeshes = dump_skn_from_mesh(mesh_obj)
-            write_skn_binary_v1(submeshes, self.filepath)
-            self.report({'INFO'}, f"SKN exportado: {self.filepath}")
+            # ___ SKN ___
+            bone_to_idx = _build_bone_to_idx(arm_obj)
+
+            # Renomeia materiais com nome > 63 caracteres ANTES de extrair submeshes
+            export_warnings = []
+            for obj in mesh_objs:
+                _enforce_material_name_limit(obj, export_warnings)
+
+            # Garante que UV layer e material tenham o mesmo nome
+            for obj in mesh_objs:
+                ok, err = _sync_uv_layer_names(obj, export_warnings)
+                if not ok:
+                    self.report({'ERROR'}, err)
+                    return {'CANCELLED'}
+
+            submeshes = []
+            for obj in mesh_objs:
+                submeshes.extend(dump_skn_from_mesh(obj, bone_to_idx))
+
+            # Une submeshes com mesmo nome (varias meshes com o mesmo material)
+            submeshes = _merge_submeshes_by_name(submeshes)
+
+            # Limite de submeshes
+            submesh_count = len(submeshes)
+            if submesh_count > 32:
+                raise ValueError(t("msg_too_many_submeshes", submesh_count))
+
+            # Limite de vertices
+            total_verts = sum(len(sm["verts"]) for sm in submeshes)
+            if total_verts > 65535:
+                raise ValueError(t("msg_too_many_verts", total_verts))
+
+            write_skn_binary(submeshes, self.filepath)
+
+            # ___ SKL ___
+            skl_path = os.path.splitext(self.filepath)[0] + ".skl"
+            joints = dump_skl_from_armature(arm_obj)
+
+            raw_influences = arm_obj.get("lol_influences")
+            influences = list(raw_influences) if raw_influences is not None else list(range(len(joints)))
+
+            write_skl_binary(joints, influences, skl_path)
+
+            for w in export_warnings:
+                self.report({'WARNING'}, w)
+
+            mesh_names = ", ".join(obj.name for obj in mesh_objs)
+            self.report({'INFO'}, t("msg_skn_exported", self.filepath, mesh_names, skl_path))
             return {'FINISHED'}
         except Exception as e:
             import traceback
             traceback.print_exc()
-            self.report({'ERROR'}, f"Erro: {e}")
+            self.report({'ERROR'}, t("msg_export_generic_error", e))
             return {'CANCELLED'}
+        

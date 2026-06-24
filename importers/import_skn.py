@@ -1,7 +1,3 @@
-"""
-Operador Blender para importar arquivos SKN do LoL
-"""
-
 import os
 import bpy
 import bmesh
@@ -14,6 +10,7 @@ from ..formats.skn import read_skn, SKNFile
 from ..utils.mesh_utils import merge_by_distance
 from ..utils.scene_setup import apply_clip_end_on_first_import, mark_imported
 from ..utils.uv_seams import compute_seam_edges, apply_seams as _apply_seams_to_mesh
+from ..i18n import t
 
 
 # UVs de loops fora da submesh ativa jogadas para fora da janela.
@@ -86,6 +83,41 @@ def _apply_weighted_normal(obj: bpy.types.Object):
         print(f"Aviso: Não foi possivel configurar todas as opções do WeightedNormal: {e}")
 
 
+# Pos-processamento
+# --------------------
+
+def _convert_to_quads(mesh: bpy.types.Mesh):
+
+    # Tenta converter triangulos em quads (Tris to Quads)
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    try:
+        bmesh.ops.join_triangles(
+            bm,
+            faces = bm.faces,
+            angle_face_threshold = 0.698132,
+            angle_shape_threshold = 0.698132
+        )
+    except:
+        pass
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+
+
+def _apply_vertex_groups(obj: bpy.types.Object, vertices: list):
+
+    # Cria os vertex groups bone_NNN a partir das influences/weights brutas do SKN
+    # vertices[i] precisa corresponder 1:1 com obj.data.vertices[i]
+    bone_groups: dict[int, bpy.types.VertexGroup] = {}
+    for vi, v in enumerate(vertices):
+        for bi, bw in zip(v.influences, v.weights):
+            if bw > 0.0:
+                if bi not in bone_groups:
+                    bone_groups[bi] = obj.vertex_groups.new(name = f"bone_{bi:03d}")
+                bone_groups[bi].add([vi], bw, 'ADD')
+
+
 # Construção da mesh
 # ---------------------
 
@@ -121,7 +153,7 @@ def build_mesh(
     mesh.from_pydata(positions, [], faces)
     mesh.update()
 
-    # ___ Atribuição de Materiais Inicial ___
+    # Atribuição de Materiais Inicial
     for sm_idx, sm in enumerate(skn.submeshes):
         mat = make_skn_material(sm.name, sm.name, use_gray = _use_gray_material)
         mesh.materials.append(mat)
@@ -131,24 +163,11 @@ def build_mesh(
             if (first_face + f) < len(mesh.polygons):
                 mesh.polygons[first_face + f].material_index = sm_idx
 
-    # ___ Conversão para Quads ___
+    # Conversão para Quads
     if _mesh_format == 'QUADS':
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-        try:
-            bmesh.ops.join_triangles(
-                bm,
-                faces = bm.faces,
-                angle_face_threshold = 0.698132,
-                angle_shape_threshold = 0.698132
-            )
-        except:
-            pass
-        bm.to_mesh(mesh)
-        bm.free()
-        mesh.update()
+        _convert_to_quads(mesh)
 
-    # ___ UV Layers e Dados de Loops ___
+    # UV Layers e Dados de Loops
     uv_layers = []
     for sm in skn.submeshes:
         layer = mesh.uv_layers.get(sm.name)
@@ -176,7 +195,7 @@ def build_mesh(
     if mesh.uv_layers:
         mesh.uv_layers[0].active = True
 
-    # ___ Normais Customizadas ___
+    # Normais Customizadas
     loop_normals = []
     for poly in mesh.polygons:
         for loop_idx in poly.loop_indices:
@@ -197,16 +216,97 @@ def build_mesh(
 
     # ___ Vertex Groups ___
     if apply_weights:
-        bone_groups: dict[int, bpy.types.VertexGroup] = {}
-        for vi, v in enumerate(skn.vertices):
-            for bi, bw in zip(v.influences, v.weights):
-                if bw > 0.0:
-                    if bi not in bone_groups:
-                        bone_groups[bi] = obj.vertex_groups.new(name = f"bone_{bi:03d}")
-                    bone_groups[bi].add([vi], bw, 'ADD')
+        _apply_vertex_groups(obj, skn.vertices)
 
     mesh.update()
     return obj
+
+
+# Construção por submesh
+# -------------------------
+
+def build_submesh_objects(skn: SKNFile, apply_weights: bool = True, *, mesh_format: str | None = None, apply_seams: bool | None = None, use_gray_material: bool | None = None,) -> list:
+    
+    prefs = get_prefs(bpy.context)
+
+    # Resolve cada opção. valor local
+    _mesh_format = mesh_format if mesh_format is not None else prefs.skn_mesh_format
+    _apply_seams = apply_seams if apply_seams is not None else prefs.skn_apply_seams
+    _use_gray_material = use_gray_material if use_gray_material is not None else prefs.skn_default_material_color
+
+    objs = []
+
+    for sm in skn.submeshes:
+        mesh = bpy.data.meshes.new(sm.name)
+        obj = bpy.data.objects.new(sm.name, mesh)
+
+        # Fatia local.
+        local_verts = skn.vertices[sm.start_vertex: sm.start_vertex + sm.vertex_count]
+        local_indices = skn.indices[sm.start_index: sm.start_index + sm.index_count]
+
+        # ___ Geometria Base (Triangulos) ___
+        positions = [(v.position[0], -v.position[2], v.position[1]) for v in local_verts]
+        faces = [
+            (local_indices[i] - sm.start_vertex, local_indices[i + 2] - sm.start_vertex, local_indices[i + 1] - sm.start_vertex)
+            for i in range(0, len(local_indices), 3)
+        ]
+        mesh.from_pydata(positions, [], faces)
+        mesh.update()
+
+        # ___ Material ___
+        mat = make_skn_material(sm.name, sm.name, use_gray = _use_gray_material)
+        mesh.materials.append(mat)
+
+        # Conversão para Quads
+        if _mesh_format == 'QUADS':
+            _convert_to_quads(mesh)
+
+        # UV Layer
+        uv_layer = mesh.uv_layers.new(name = sm.name)
+        for poly in mesh.polygons:
+            for loop_idx in poly.loop_indices:
+                vi = mesh.loops[loop_idx].vertex_index
+                u, v = local_verts[vi].uv
+                uv_layer.data[loop_idx].uv = (u, 1.0 - v)
+        uv_layer.active = True
+
+        # ___ Normais ___
+        loop_normals = []
+        for poly in mesh.polygons:
+            for loop_idx in poly.loop_indices:
+                vi = mesh.loops[loop_idx].vertex_index
+                n = local_verts[vi].normal
+                loop_normals.append((n[0], -n[2], n[1]))
+        mesh.normals_split_custom_set(loop_normals)
+        if hasattr(mesh, "use_auto_smooth"):
+            mesh.use_auto_smooth = True
+
+        # ___ WeightedNormal ___
+        _apply_weighted_normal(obj)
+
+        # ___ Seams ___
+        if _apply_seams:
+
+            # Reusa compute_seam_edges com uma "fatia" local do SKN
+            local_skn = SKNFile(
+                version_major = skn.version_major,
+                version_minor = skn.version_minor,
+                vertex_type = skn.vertex_type,
+                submeshes = [],
+                indices = [idx - sm.start_vertex for idx in local_indices],
+                vertices = local_verts,
+            )
+            seam_edges = compute_seam_edges(local_skn)
+            _apply_seams_to_mesh(mesh, seam_edges)
+
+        # ___ Vertex Groups ___
+        if apply_weights:
+            _apply_vertex_groups(obj, local_verts)
+
+        mesh.update()
+        objs.append(obj)
+
+    return objs
 
 
 # Operador
@@ -216,8 +316,8 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
 
     # Importa um modelo SKN do LoL
     bl_idname = "leagueblender.import_skn"
-    bl_label = "League Mesh (.skn)"
-    bl_description = "Importa um Skinned Mesh (.skn) do League of Legends"
+    bl_label = t("op_import_skn_label")
+    bl_description = t("op_import_skn_desc")
     bl_options = {'REGISTER', 'UNDO'}
 
     filename_ext = ".skn"
@@ -227,38 +327,36 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
     # ------------------------------------------------------------------------
 
     skn_mesh_format: EnumProperty(
-        name="Mesh Topology",
-        description="Mantem triangulos ou converte para quads",
+        name=t("prop_skn_mesh_format_name"),
+        description=t("prop_skn_mesh_format_desc"),
         items=[
-            ('TRIS',  "Triangles (Default)", "Mantem a topologia original em triangulos"),
-            ('QUADS', "Quads (Tris to Quads)", "Tenta converter triangulos em quads"),
+            ('TRIS',  t("prop_skn_mesh_format_tris_name"),  t("prop_skn_mesh_format_tris_desc")),
+            ('QUADS', t("prop_skn_mesh_format_quads_name"), t("prop_skn_mesh_format_quads_desc")),
         ],
         default='TRIS',
     )
 
     skn_apply_seams: BoolProperty(
-        name="Rebuild Seam (BETA)",
-        description="Detecta e marca UV seams automaticamente ao importar",
+        name=t("prop_skn_apply_seams_name"),
+        description=t("prop_skn_apply_seams_desc"),
         default=False,
     )
 
     skn_apply_vertex_groups: BoolProperty(
-        name="Import Vertex Groups",
-        description=(
-            "Groups of vertices matter with skinning weights."
-        ),
+        name=t("prop_skn_apply_vertex_groups_name"),
+        description=t("prop_skn_apply_vertex_groups_desc"),
         default=False,
     )
 
     skn_merge_by_distance: BoolProperty(
-        name="Merge by Distance",
-        description="Faz Merge > By Distance nos vertices apos importar",
+        name=t("prop_skn_merge_by_distance_name"),
+        description=t("prop_skn_merge_by_distance_desc"),
         default=False,
     )
 
     skn_merge_threshold: FloatProperty(
-        name="Distance",
-        description="Distancia maxima para considerar dois vertices como duplicados",
+        name=t("prop_skn_merge_threshold_name"),
+        description=t("prop_skn_merge_threshold_desc"),
         default=0.001,
         min=0.00001,
         max=0.1,
@@ -268,9 +366,15 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
     )
 
     skn_default_material_color: BoolProperty(
-        name="Gray Mesh by Default",
-        description="Aplica a cor cinza padrão do LeagueBlender aos materiais criados",
+        name=t("prop_skn_default_material_color_name"),
+        description=t("prop_skn_default_material_color_desc"),
         default=True,
+    )
+
+    skn_import_as_collection: BoolProperty(
+        name=t("prop_skn_import_as_collection_name"),
+        description=t("prop_skn_import_as_collection_desc_skn"),
+        default=False,
     )
 
     def draw(self, context):
@@ -282,20 +386,27 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
 
         prefs = get_prefs(context)
 
-        col = layout.column(heading = "SKN Options")
+        col = layout.column(heading = t("ui_skn_options"))
         col.prop(self, "skn_mesh_format")
         col.prop(self, "skn_default_material_color")
         col.prop(self, "skn_apply_seams")
         col.prop(self, "skn_apply_vertex_groups")
 
         col.separator()
-        col.prop(self, "skn_merge_by_distance")
+        col.prop(self, "skn_import_as_collection")
+
+        col.separator()
+        row = col.row()
+
+        # Merge by Distance não se aplica quando cada submesh vira um objeto separado
+        row.enabled = not self.skn_import_as_collection
+        row.prop(self, "skn_merge_by_distance")
         sub = col.row()
-        sub.enabled = self.skn_merge_by_distance
+        sub.enabled = self.skn_merge_by_distance and not self.skn_import_as_collection
         sub.prop(self, "skn_merge_threshold")
 
         col.separator()
-        col.label(text = "Defaults via Addon Preferences", icon = 'PREFERENCES')
+        col.label(text = t("ui_defaults_via_prefs"), icon = 'PREFERENCES')
 
     def invoke(self, context, event):
 
@@ -306,6 +417,7 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
         self.skn_merge_by_distance = prefs.skn_merge_by_distance
         self.skn_merge_threshold = prefs.skn_merge_threshold
         self.skn_default_material_color = prefs.skn_default_material_color
+        self.skn_import_as_collection = prefs.skn_import_as_collection
         return super().invoke(context, event)
 
     def execute(self, context):
@@ -315,11 +427,49 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
         try:
             skn = read_skn(path)
         except Exception as e:
-            self.report({'ERROR'}, f"Failed to read SKN: {e}")
+            self.report({'ERROR'}, t("msg_failed_read_skn", e))
             return {'CANCELLED'}
 
         skn.flip()
 
+        apply_clip_end_on_first_import(context)
+
+        # ___ Modo Collection ___
+        if self.skn_import_as_collection:
+            try:
+                objs = build_submesh_objects(
+                    skn,
+                    apply_weights = self.skn_apply_vertex_groups,
+                    mesh_format = self.skn_mesh_format,
+                    apply_seams = self.skn_apply_seams,
+                    use_gray_material = self.skn_default_material_color,
+                )
+            except Exception as e:
+                self.report({'ERROR'}, t("msg_failed_build_mesh", e))
+                return {'CANCELLED'}
+
+            collection = bpy.data.collections.new(name)
+            context.collection.children.link(collection)
+
+            bpy.ops.object.select_all(action = 'DESELECT')
+            for obj in objs:
+                collection.objects.link(obj)
+                mark_imported(obj)
+                obj.select_set(True)
+
+            if objs:
+                context.view_layer.objects.active = objs[0]
+
+            self.report({'INFO'}, t(
+                "msg_skn_imported_collection",
+                name,
+                len(skn.vertices),
+                len(skn.indices) // 3,
+                len(skn.submeshes),
+            ))
+            return {'FINISHED'}
+
+        # Modo padrão
         try:
             obj = build_mesh(
                 skn,
@@ -330,10 +480,9 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
                 use_gray_material = self.skn_default_material_color,
             )
         except Exception as e:
-            self.report({'ERROR'}, f"Failed to build mesh: {e}")
+            self.report({'ERROR'}, t("msg_failed_build_mesh", e))
             return {'CANCELLED'}
 
-        apply_clip_end_on_first_import(context)
         context.collection.objects.link(obj)
         mark_imported(obj)
         bpy.ops.object.select_all(action = 'DESELECT')
@@ -344,10 +493,11 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
         if self.skn_merge_by_distance:
             merge_by_distance(obj, threshold = self.skn_merge_threshold)
 
-        self.report({'INFO'},
-            f"SKN importado: {name} - "
-            f"{len(skn.vertices):,} verts, "
-            f"{len(skn.indices) // 3:,} faces, "
-            f"{len(skn.submeshes)} submesh(es)"
-        )
+        self.report({'INFO'}, t(
+            "msg_skn_imported",
+            name,
+            len(skn.vertices),
+            len(skn.indices) // 3,
+            len(skn.submeshes),
+        ))
         return {'FINISHED'}

@@ -5,8 +5,7 @@ LeagueBlender — Blender Plugin
 Suporte atual:
   - Import: SKN (Skinned Mesh)
   - Import: SKL (Skeleton + SKN vinculado)
-  - Export: SKN (Skinned Mesh)
-  - Export: SKL (Skeleton)
+  - Export: SKN (Skinned Mesh + SKL vinculado)
 
 Em desenvolvimento:
   - Melhorias no Importe de arquivos SKN e SKL
@@ -31,10 +30,10 @@ Talvez eu não traga o suporte para MAPGEO. :p
 bl_info = {
     "name": "LeagueBlender",
     "author": "ReverseCall",
-    "version": (0, 1, 0),
+    "version": (0, 2, 0),
     "blender": (5, 0, 0),
     "location": "File > Import / File > Export",
-    "warning": "Essa jocha pode explodir a qualquer momento",
+    "warning": "Essa josa pode explodir a qualquer momento",
     "description": "Imports and exports the formats supported by League Of Legends",
     "doc_url": "https://github.com/ReverseCall/LeagueBlender",
     "tracker_url": "https://github.com/ReverseCall/LeagueBlender/issues",
@@ -51,28 +50,27 @@ from .preferences import LeagueBlenderPreferences
 from .importers.import_skn import LEAGUEBLENDER_OT_import_skn
 from .importers.import_skl import LEAGUEBLENDER_OT_import_skl
 from .exporters.export_skn import LEAGUEBLENDER_OT_export_skn
-from .exporters.export_skl import LEAGUEBLENDER_OT_export_skl
+from .i18n import t
 
 
 def menu_import(self, context):
     self.layout.operator(
         LEAGUEBLENDER_OT_import_skn.bl_idname,
-        text="League Mesh (.skn)",
+        text=t("op_import_skn_label"),
     )
     self.layout.operator(
         LEAGUEBLENDER_OT_import_skl.bl_idname,
-        text="League Skeleton (.skl + .skn)",
+        text=t("op_import_skl_label"),
     )
 
 
 def menu_export(self, context):
+
+    # Antes era possivel exportar o SKL separado mas agora depos
+    # Que todos os testes que eu tinha para fazer acabaram eu removir isso
     self.layout.operator(
         LEAGUEBLENDER_OT_export_skn.bl_idname,
-        text="League Mesh (.skn)",
-    )
-    self.layout.operator(
-        LEAGUEBLENDER_OT_export_skl.bl_idname,
-        text="League Skeleton (.skl)",
+        text=t("op_export_skn_label"),
     )
 
 
@@ -81,8 +79,8 @@ _classes = [
     LEAGUEBLENDER_OT_import_skn,
     LEAGUEBLENDER_OT_import_skl,
     LEAGUEBLENDER_OT_export_skn,
-    LEAGUEBLENDER_OT_export_skl,
 ]
+
 
 def register():
     for cls in _classes:
@@ -90,8 +88,10 @@ def register():
     bpy.types.TOPBAR_MT_file_import.append(menu_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_export)
 
+
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_export)
     bpy.types.TOPBAR_MT_file_import.remove(menu_import)
     for cls in reversed(_classes):
         bpy.utils.unregister_class(cls)
+        

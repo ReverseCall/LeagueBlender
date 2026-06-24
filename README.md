@@ -49,11 +49,15 @@ To get the latest version of LeagueBlender, [click here to download](https://git
 
 ### 2. Install in Blender
 
+<details>
+<summary>Click to show the guide.</summary>
+
 Follow the steps below to install the plugin in Blender:
 
 1. In Blender, navigate to: `Edit` > `Preferences` > `Add-ons` > `Install...`
 2. Select the `LeagueBlender.zip` file you downloaded.
 3. After installation, enable the `LeagueBlender` addon.
+</details>
 
 ## How to Import Files
 
@@ -84,25 +88,32 @@ This option imports both the mesh (`.SKN`) and the armature (`.SKL`) together. T
 
 ## How to Export Files
 
-### Export a Mesh (.SKN)
+### Export a Mesh (.SKN + .SKL)
 
-* Select the desired mesh.
-* Go to: `File` > `Export` > `League Mesh (.skn)`
+* Select the desired mesh or part of the submesh.
+* Go to: `File` > `Export` > `League Mesh (.skn + .skl)`
 * Choose the destination folder.
-* Click **Export SKN**.
-
-### Export a Skeleton (.SKL)
-
-* Select the desired armature.
-* Go to: `File` > `Export` > `League Skeleton (.skl)`
-* Choose the destination folder.
-* Click **Export SKL**.
+* Click **Export**.
 
 ## Plugin Preferences
 
 LeagueBlender settings can be accessed at: `Edit` > `Preferences` > `Add-ons` > `LeagueBlender`
 
-The plugin currently organizes its settings into two main categories:
+<details>
+<summary>Click to show.</summary>
+
+The plugin currently organizes its settings into the following categories:
+
+### General
+
+#### Language
+
+Allows you to select the plugin's language. When a language is chosen, all user-visible text will be displayed in the selected language.
+
+**Available languages**
+
+- English
+- Português (Brasil)
 
 ### SKN Preferences
 
@@ -126,6 +137,13 @@ Defines the material automatically applied when importing a `.SKN` file.
 
 * Plugin's custom gray material
 * Blender's default material
+
+#### Import as Collection (Submeshes)
+
+Defines how the model will be imported into Blender's 3D scene.
+
+* **Enabled** — Splits the mesh into multiple objects based on the materials applied to the model.
+* **Disabled** — Imports the entire model as a single mesh, regardless of the number of materials used.
 
 #### Merge by Distance
 
@@ -153,6 +171,8 @@ Displays the armature in front of all other objects in the viewport, making it e
 ### Auto Clip End
 
 Sets the `Sidebar` > `View` > `End` clip distance to **10000 m** by default when importing a `.SKN` or `.SKL` file for the first time into your scene.
+
+</details>
 
 ## Current Project Status
 

@@ -1,9 +1,6 @@
 import bpy
-from bpy.types import Operator
-from bpy.props import StringProperty
-from bpy_extras.io_utils import ExportHelper
 
-from ..formats.skl import elf_hash, write_skl_binary_modern
+from ..formats.skl import elf_hash
 
 
 # Conversão de espaço
@@ -106,37 +103,3 @@ def dump_skl_from_armature(arm_obj: bpy.types.Object) -> list:
         joints.append(j)
 
     return joints
-
-
-# Operador
-# -----------
-
-class LEAGUEBLENDER_OT_export_skl(Operator, ExportHelper):
-    bl_idname = "leagueblender.export_skl"
-    bl_label = "League Skeleton (.skl)"
-    filename_ext = ".skl"
-    filter_glob: StringProperty(default="*.skl", options={'HIDDEN'})
-
-    def execute(self, context):
-        arm_obj = context.active_object
-        if not arm_obj or arm_obj.type != 'ARMATURE':
-            self.report({'ERROR'}, "Select an ARMATURE before exporting.")
-            return {'CANCELLED'}
-
-        try:
-            joints = dump_skl_from_armature(arm_obj)
-
-            # Recupera a influence list original gravada na importação
-            # Se não existir (armature novo), usa sequência identidade 0..N-1
-            raw_influences = arm_obj.get("lol_influences")
-            influences = list(raw_influences) if raw_influences is not None else list(range(len(joints)))
-
-            write_skl_binary_modern(joints, influences, self.filepath)
-            self.report({'INFO'}, f"SKL exportado: {len(joints)} joints -> {self.filepath}")
-            return {'FINISHED'}
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.report({'ERROR'}, f"Erro: {e}")
-            return {'CANCELLED'}
-        

@@ -25,7 +25,7 @@ A tabela a seguir detalha o status de suporte para importação e exportação d
 
 | Formato                   | Importação    | Exportação          |
 | :------------------------: | :------------: | :------------------: |
-| **Skinned Mesh** (`.SKN`)       | ✅ | ⚠️ |
+| **Skinned Mesh** (`.SKN`)       | ✅ | ✅ |
 | **Skeleton** (`.SKL`)           | ✅ | ✅ |
 | **Animation** (`.ANM`)          | 🔨 | 🔨 |
 | **Static Mesh** (`SCO`)         | 🔨 | 🔨 |
@@ -50,6 +50,9 @@ Para obter a versão mais recente do LeagueBlender, [clique aqui para baixar](ht
 
 ### 2. Instale no Blender
 
+<details>
+<summary>Clique para exibir o guia.</summary>
+
 Siga os passos abaixo para instalar o plugin no Blender:
 
 1.  No Blender, navegue até: `Edit` > `Preferences` > `Add-ons` > `Install...`
@@ -57,6 +60,7 @@ Siga os passos abaixo para instalar o plugin no Blender:
 2.  Selecione o arquivo `LeagueBlender.zip` do plugin que você baixou.
 
 3.  Após a instalação, ative o *addon* `LeagueBlender`.
+</details>
 
 ## Como Importar Arquivos
 
@@ -89,25 +93,33 @@ Esta opção realiza a importação conjunta da malha (`.SKN`) e do *armature* (
 
 ## Como Exportar Arquivos
 
-### Exportar uma Mesh (.SKN)
+### Exportar uma Mesh (.SKN + .SKL)
 
-* Selecione a malha desejada.
-* Acesse: `File` > `Export ` > `League Mesh (.skn)` 
+* Selecione a malha desejada ou parte da submesh.
+* Acesse: `File` > `Export ` > `League Mesh (.skn + .skl)` 
 * Escolha o local de destino.
-* Clique em Export SKN.
-
-### Exportar um Skeleton (.SKL)
-
-* Selecione a armature desejada.
-* Acesse: `File` > `Export ` > `League Skeleton (.skl)` 
-* Escolha o local de destino.
-* Clique em Export SKL.
+* Clique em Export.
 
 ## Preferências do Plugin
 
+<details>
+
+<summary>Clique para exibir.</summary>
+
 As configurações do LeagueBlender podem ser acessadas em: `Edit` > `Preferences` > `Add-ons` > `LeagueBlender`
 
-O plugin atualmente organiza suas configurações em duas categorias principais:
+O plugin atualmente organiza suas configurações da segunte forma:
+
+### Geral
+
+#### Idioma
+
+Permite selecionar o idioma do plugin. Ao escolher um idioma, todos os textos visíveis para o usuário serão exibidos no idioma selecionado.
+
+**Idiomas disponíveis**
+
+- English (Inglês)
+- Português (Brasil)
 
 ### Preferências do SKN
 
@@ -133,6 +145,16 @@ Define o material que será aplicado automaticamente ao importar um arquivo `.SK
 
 *   **Material cinza customizado do plugin**
 *   **Material padrão do Blender**
+
+#### Import as Collection (Submeshes)
+
+Define como o modelo será importado para a cena 3D do Blender.
+
+*   **Ativado**
+    *   Separa a malha em múltiplos objetos com base nos materiais aplicados ao modelo.
+*   **Desativado**
+    *   Importa todo o modelo como uma única malha, independentemente da quantidade de materiais utilizados.
+
 
 #### Merge by Distance
 
@@ -162,8 +184,7 @@ Exibe o *armature* à frente dos demais objetos na *viewport*, facilitando a vis
 ### Auto Clip End
 
 Configura o FOV da sua `Sidebar` > `View` > `End` para **10000 m** como padrão ao importar um arquivo `.SKN` ou `.SKL` pela primeira vez para a sua *Cena*.
-
-
+</details>
 
 ## Estado Atual do Projeto
 

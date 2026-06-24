@@ -271,7 +271,7 @@ def read_skn(path: str) -> SKNFile:
 # Serialização binaria
 # ----------------------
 
-def write_skn_binary_v1(submeshes: list, path: str):
+def write_skn_binary(submeshes: list, path: str):
 
     # Escreve o SKN (magic = 0x00112233, major = 1, minor = 1)
     all_verts = []

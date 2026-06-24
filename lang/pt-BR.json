@@ -1,0 +1,96 @@
+{
+    "prefs_general_section": "Geral",
+    "prefs_skn_section": "Preferências do SKN",
+    "prefs_skl_section": "Preferências do SKL",
+    "prefs_scene_section": "Preferências de Cena",
+
+    "prop_language_name": "Idioma",
+    "prop_language_desc": "Idioma usado na interface deste addon. Reinicie o Blender para aplicar a mudança",
+    "prefs_restart_required": "Reinicie o Blender para aplicar o novo idioma",
+
+    "prop_skn_mesh_format_name": "Topologia da Mesh",
+    "prop_skn_mesh_format_desc": "Mantem triangulos ou converte para quads",
+    "prop_skn_mesh_format_tris_name": "Triângulos (Padrão)",
+    "prop_skn_mesh_format_tris_desc": "Mantem a topologia original em triangulos",
+    "prop_skn_mesh_format_quads_name": "Quads (Tris to Quads)",
+    "prop_skn_mesh_format_quads_desc": "Tenta converter triangulos em quads",
+
+    "prop_skn_apply_seams_name": "Recriar Seam (BETA)",
+    "prop_skn_apply_seams_desc": "Detecta e marca UV seams automaticamente ao importar um SKN",
+
+    "prop_skn_apply_vertex_groups_name": "Importar Vertex Groups",
+    "prop_skn_apply_vertex_groups_desc": "Importa os grupos de vertices com os pesos de skinning do SKN",
+
+    "prop_skn_merge_by_distance_name": "Mesclar por Distância",
+    "prop_skn_merge_by_distance_desc": "Faz Merge > By Distance nos vertices apos importar o SKN",
+
+    "prop_skn_merge_threshold_name": "Distância",
+    "prop_skn_merge_threshold_desc": "Distancia maxima para considerar dois vertices como duplicados",
+
+    "prop_skn_default_material_color_name": "Mesh Cinza por Padrão",
+    "prop_skn_default_material_color_desc": "Aplica a cor cinza padrão do LeagueBlender aos materiais criados ao importar SKN",
+
+    "prop_skn_import_as_collection_name": "Importar como Collection (Submeshes)",
+    "prop_skn_import_as_collection_desc_skn": "Importa cada submesh do SKN como um objeto separado, agrupados em uma Collection com o nome do arquivo",
+    "prop_skn_import_as_collection_desc_skl": "Importa cada submesh do SKN como um objeto separado, parentados ao Armature (que serve de container)",
+
+    "prop_skl_bone_shape_name": "Forma dos Ossos",
+    "prop_skl_bone_shape_desc": "Forma visual dos ossos ao importar o Skeleton (.skl)",
+    "prop_skl_bone_shape_blender_name": "Blender (Stick)",
+    "prop_skl_bone_shape_blender_desc": "Forma padrão do Blender",
+    "prop_skl_bone_shape_sphere_name": "Esfera (wire)",
+    "prop_skl_bone_shape_sphere_desc": "Esfera wire estilo glTF",
+
+    "prop_skl_show_in_front_name": "Mostrar na Frente",
+    "prop_skl_show_in_front_desc": "Desenha o armature sobre outros objetos (opção In Front)",
+
+    "prop_skl_only_name": "Importar Apenas o SKL",
+    "prop_skl_only_desc": "Importa apenas o Skeleton, sem carregar o SKN",
+
+    "prop_scene_auto_clip_end_name": "Auto Clip End",
+    "prop_scene_auto_clip_end_desc": "Ajusta o Clip End da viewport e da camera no primeiro import, evitando que modelos sejam cortados em cenas grandes",
+
+    "prop_scene_clip_end_distance_name": "Distância do Clip End",
+    "prop_scene_clip_end_distance_desc": "Valor de Clip End aplicado a todas as viewports e a camera ativa no primeiro import",
+
+    "ui_skn_options": "Opções de SKN",
+    "ui_skl_options": "Opções de SKL",
+    "ui_defaults_via_prefs": "Padrões via Preferências do Addon",
+
+    "op_import_skn_label": "League Mesh (.skn)",
+    "op_import_skn_desc": "Importa um Skinned Mesh (.skn) do League of Legends",
+    "op_import_skl_label": "League Skeleton (.skl + .skn)",
+    "op_import_skl_desc": "Importa Skeleton (.skl) + Mesh (.skn) do League of Legends. O .skn deve ter o mesmo nome e estar na mesma pasta.",
+    "op_export_skn_label": "League Mesh (.skn + .skl)",
+
+    "msg_failed_read_skn": "Falha ao ler o SKN: {0}",
+    "msg_failed_build_mesh": "Falha ao construir a mesh: {0}",
+    "msg_skn_imported_collection": "SKN importado como Collection: {0} - {1:,} verts, {2:,} faces, {3} submesh(es)",
+    "msg_skn_imported": "SKN importado: {0} - {1:,} verts, {2:,} faces, {3} submesh(es)",
+
+    "msg_skl_parse_error": "Erro ao interpretar o SKL: {0}",
+    "msg_skn_parse_error": "Erro ao interpretar o SKN: {0}",
+    "msg_armature_create_error": "Erro ao criar o armature: {0}",
+    "msg_mesh_create_error": "Erro ao criar a mesh: {0}",
+    "msg_skinning_error": "Erro no skinning: {0}",
+    "msg_skinning_error_named": "Erro no skinning ({0}): {1}",
+    "msg_skn_not_found": "SKN não encontrado: {0}\nO .skn deve estar na mesma pasta e com o mesmo nome do .skl.",
+    "msg_skl_imported_container": "SKL importado (Armature como container): {0} - {1} joints",
+    "msg_imported_container": "Importado (Armature como container): {0} - {1} joints, {2:,} verts, {3} submesh(es)",
+    "msg_imported_full": "Importado: {0} - {1} joints, {2:,} verts",
+    "msg_skl_imported": "SKL importado: {0} - {1} joints",
+
+    "msg_export_select_mesh": "Selecione um objeto do tipo MESH antes de exportar.",
+    "msg_export_no_armature": "[SKN.dump({0})]: A mesh não possui um modifier Armature. Vincule a mesh a um skeleton antes de exportar.",
+    "msg_export_no_material": "[SKN.dump({0})]: Nenhum material atribuído a esta mesh. Atribua ao menos um material antes de exportar.",
+    "msg_export_empty_material_slot": "[SKN.dump({0})]: O slot de material {1} está vazio. Preencha ou remova slots vazios antes de exportar.",
+    "msg_material_renamed": "O material \"{0}\" ({1} caracteres) excede o limite de {2} caracteres e foi renomeado para \"{3}\".",
+    "msg_uv_renamed": "UV Map \"{0}\" renomeada para \"{1}\" para corresponder ao material (mesh \"{2}\").",
+    "msg_uv_renamed_elimination": "UV Map \"{0}\" renomeada para \"{1}\" para corresponder ao material (mesh \"{2}\"), único par possível por eliminação.",
+    "msg_uv_ambiguous": "[SKN.dump({0})]: Não foi possível determinar qual UV Map pertence a cada material. Materiais sem UV Map correspondente: {1}. UV Maps disponíveis sem material correspondente: {2}. Renomeie manualmente os UV Maps para que tenham o mesmo nome do material correspondente antes de exportar.",
+    "msg_no_leftover_uvs": "(nenhuma)",
+    "msg_too_many_submeshes": "[SKN.dump]: Muitos materiais atribuídos: {0}, máximo permitido: 32 materiais.",
+    "msg_too_many_verts": "[SKN.dump]: Muitos vertices encontrados: {0}, máximo permitido: 65535 vertices.",
+    "msg_skn_exported": "SKN exportado: {0} ({1}) | SKL exportado: {2}",
+    "msg_export_generic_error": "Erro: {0}"
+}
