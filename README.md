@@ -25,7 +25,7 @@ The table below details the support status for importing and exporting League of
 
 | Format | Import | Export |
 |:---:|:---:|:---:|
-| **Skinned Mesh** (`.SKN`)       | ✅ | ⚠️ |
+| **Skinned Mesh** (`.SKN`)       | ✅ | ✅ |
 | **Skeleton** (`.SKL`)           | ✅ | ✅ |
 | **Animation** (`.ANM`)          | 🔨 | 🔨 |
 | **Static Mesh** (`SCO`)         | 🔨 | 🔨 |
