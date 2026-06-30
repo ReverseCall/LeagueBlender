@@ -1,73 +1,78 @@
 {
     "prefs_general_section": "General",
-    "prefs_skn_section": "SKN Preferences",
+    "prefs_skn_section": "SKN / SCB Preferences",
     "prefs_skl_section": "SKL Preferences",
     "prefs_scene_section": "Scene Preferences",
-
+    
     "prop_language_name": "Language",
     "prop_language_desc": "Language used in this addon's interface. Restart Blender to apply changes",
     "prefs_restart_required": "Restart Blender to apply the new language",
-
+    
     "prop_skn_mesh_format_name": "Mesh Topology",
     "prop_skn_mesh_format_desc": "Choose whether the mesh should be kept as triangles or converted to quads",
     "prop_skn_mesh_format_tris_name": "Triangles (Default)",
     "prop_skn_mesh_format_tris_desc": "Maintains the original triangle topology",
     "prop_skn_mesh_format_quads_name": "Quads (Tris to Quads)",
     "prop_skn_mesh_format_quads_desc": "Attempts to convert triangles to quads",
-
+    "prop_scb_mesh_format_name": "Mesh Topology",
+    "prop_scb_mesh_format_desc": "Choose whether the mesh should be kept as triangles or converted to quads",
     "prop_skn_apply_seams_name": "Rebuild Seam (BETA)",
-    "prop_skn_apply_seams_desc": "Automatically detects and marks UV seams when importing an SKN",
-
+    "prop_skn_apply_seams_desc": "Automatically detects and marks UV seams when importing",
+    
     "prop_skn_apply_vertex_groups_name": "Import Vertex Groups",
     "prop_skn_apply_vertex_groups_desc": "Groups of vertices matter with skinning weights.",
-
+    
     "prop_skn_merge_by_distance_name": "Merge by Distance",
-    "prop_skn_merge_by_distance_desc": "Performs Merge > By Distance on vertices after importing SKN",
-
+    "prop_skn_merge_by_distance_desc": "Performs Merge > By Distance on vertices after importing",
+    
     "prop_skn_merge_threshold_name": "Distance",
     "prop_skn_merge_threshold_desc": "Maximum distance to consider two vertices as duplicates when using Merge by Distance",
-
+    
     "prop_skn_default_material_color_name": "Gray Mesh by Default",
-    "prop_skn_default_material_color_desc": "Applies the default LeagueBlender gray color to materials created when importing SKN",
-
+    "prop_skn_default_material_color_desc": "Applies the default LeagueBlender gray color to materials created when importing",
+    
     "prop_skn_import_as_collection_name": "Import as Collection (Submeshes)",
     "prop_skn_import_as_collection_desc_skn": "Imports each SKN submesh as a separate object, grouped in a Collection named after the file",
     "prop_skn_import_as_collection_desc_skl": "Imports each SKN submesh as a separate object, parented to the Armature (which acts as the container)",
-
+    
     "prop_skl_bone_shape_name": "Bone Shape",
     "prop_skl_bone_shape_desc": "Visual shape of bones when importing a Skeleton (.skl)",
     "prop_skl_bone_shape_blender_name": "Blender (Stick)",
     "prop_skl_bone_shape_blender_desc": "Blender's default bone shape",
     "prop_skl_bone_shape_sphere_name": "Sphere (wire)",
     "prop_skl_bone_shape_sphere_desc": "Wire sphere style like glTF",
-
+    
     "prop_skl_show_in_front_name": "Show In Front",
     "prop_skl_show_in_front_desc": "Draw the armature on top of other objects (In Front option)",
-
+    
     "prop_skl_only_name": "Import SKL Only",
     "prop_skl_only_desc": "Imports only the Skeleton, without loading the SKN",
-
+    
     "prop_scene_auto_clip_end_name": "Auto Clip End",
     "prop_scene_auto_clip_end_desc": "Adjusts the viewport and camera Clip End on the first import, preventing models from being clipped in large scenes",
-
+    
     "prop_scene_clip_end_distance_name": "Clip End Distance",
     "prop_scene_clip_end_distance_desc": "Clip End value applied to all viewports and the active camera on the first import",
-
+    
     "ui_skn_options": "SKN Options",
     "ui_skl_options": "SKL Options",
+    "ui_scb_options": "SCB Options",
     "ui_defaults_via_prefs": "Defaults via Addon Preferences",
-
+    
     "op_import_skn_label": "League Mesh (.skn)",
     "op_import_skn_desc": "Imports a Skinned Mesh (.skn) from League of Legends",
     "op_import_skl_label": "League Skeleton (.skl + .skn)",
     "op_import_skl_desc": "Imports Skeleton (.skl) + Mesh (.skn) from League of Legends. The .skn must have the same name and be in the same folder.",
     "op_export_skn_label": "League Mesh (.skn + .skl)",
-
+    "op_import_scb_label": "League Static Mesh (.scb)",
+    "op_import_scb_desc": "Imports a Static Mesh (.scb) from League of Legends",
     "msg_failed_read_skn": "Failed to read SKN: {0}",
     "msg_failed_build_mesh": "Failed to build mesh: {0}",
+    "msg_failed_read_scb": "Failed to read SCB: {0}",
+    "msg_failed_build_mesh_scb": "Failed to build mesh from SCB: {0}",
     "msg_skn_imported_collection": "SKN imported as Collection: {0} - {1:,} verts, {2:,} faces, {3} submesh(es)",
     "msg_skn_imported": "SKN imported: {0} - {1:,} verts, {2:,} faces, {3} submesh(es)",
-
+    "msg_scb_imported": "SCB imported: {0} - {1:,} verts, {2:,} faces (v{3})",
     "msg_skl_parse_error": "Error in SKL parsing: {0}",
     "msg_skn_parse_error": "Error in SKN parsing: {0}",
     "msg_armature_create_error": "Error creating armature: {0}",
@@ -79,7 +84,7 @@
     "msg_imported_container": "Imported (Armature as container): {0} - {1} joints, {2:,} verts, {3} submesh(es)",
     "msg_imported_full": "Imported: {0} - {1} joints, {2:,} verts",
     "msg_skl_imported": "SKL imported: {0} - {1} joints",
-
+    
     "msg_export_select_mesh": "Select an object of type MESH before exporting.",
     "msg_export_no_armature": "[SKN.dump({0})]: Mesh does not have an Armature modifier. Bind the mesh to a skeleton before exporting.",
     "msg_export_no_material": "[SKN.dump({0})]: No material assigned to this mesh. Please assign at least one material before exporting.",
@@ -92,5 +97,6 @@
     "msg_too_many_submeshes": "[SKN.dump]: Too many materials assigned: {0}, max allowed: 32 materials.",
     "msg_too_many_verts": "[SKN.dump]: Too many vertices found: {0}, max allowed: 65535 vertices.",
     "msg_skn_exported": "SKN exported: {0} ({1}) | SKL exported: {2}",
+    "msg_scb_unknown_ext": "Unknown extension: {0}. Expected .scb",
     "msg_export_generic_error": "Error: {0}"
 }

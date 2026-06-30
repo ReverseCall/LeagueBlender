@@ -1,12 +1,13 @@
 import os
 import bpy
-import bmesh
 from bpy.types import Operator
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, FloatProperty
 
 from ..preferences import get_prefs
 from ..formats.skn import read_skn, SKNFile
+from ..formats.shared_mesh import make_base_material, convert_to_quads, apply_weighted_normal
+
 from ..utils.mesh_utils import merge_by_distance
 from ..utils.scene_setup import apply_clip_end_on_first_import, mark_imported
 from ..utils.uv_seams import compute_seam_edges, apply_seams as _apply_seams_to_mesh
@@ -21,88 +22,22 @@ _UV_STUB = (-10.0, -10.0)
 # Material
 # ===========
 
-def _srgb_to_linear(c: float) -> float:
-    if c <= 0.04045:
-        return c / 12.92
-    return ((c + 0.055) / 1.055) ** 2.4
-
-_LINEAR_VALUE = _srgb_to_linear(0.158220)
-
-
 def make_skn_material(mat_name: str, uv_layer_name: str, use_gray: bool = True) -> bpy.types.Material:
-    mat = bpy.data.materials.new(name = mat_name)
-    mat.use_nodes = True
-    nodes = mat.node_tree.nodes
-    links = mat.node_tree.links
-    nodes.clear()
-
-    out = nodes.new("ShaderNodeOutputMaterial")
-    out.location = (600, 0)
-
-    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
-    bsdf.location = (200, 0)
-
-    if use_gray:
-        color = (_LINEAR_VALUE, _LINEAR_VALUE, _LINEAR_VALUE, 1.0)
-    else:
-        color = (0.8, 0.8, 0.8, 1.0)   # Branco padrão do Blender
-
-    bsdf.inputs["Base Color"].default_value = color
-    bsdf.inputs["Roughness"].default_value = 1.0
-    bsdf.inputs["Metallic"].default_value = 0.0
-
-    uv_node = nodes.new("ShaderNodeUVMap")
-    uv_node.location = (-200, -200)
-    uv_node.uv_map = uv_layer_name
-
-    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
-    mat.diffuse_color = color
-    return mat
+    return make_base_material(mat_name, uv_layer_name=uv_layer_name, use_gray=use_gray)
 
 
 # WeightedNormal
 # -----------------
 
 def _apply_weighted_normal(obj: bpy.types.Object):
-
-    # Aplica o modificador WeightedNormal ao objeto
-    wn = obj.modifiers.new(name = "WeightedNormal", type = 'WEIGHTED_NORMAL')
-    try:
-        if hasattr(wn, "weighting_mode"):
-            wn.weighting_mode = 'FACE_AREA'
-        elif hasattr(wn, "mode"):
-            wn.mode = 'FACE_AREA'
-
-        wn.weight = 50
-
-        if hasattr(wn, "thresh"):
-            wn.thresh = 0.01
-        elif hasattr(wn, "threshold"):
-            wn.threshold = 0.01
-    except Exception as e:
-        print(f"Aviso: Não foi possivel configurar todas as opções do WeightedNormal: {e}")
+    apply_weighted_normal(obj)
 
 
 # Pos-processamento
 # --------------------
 
 def _convert_to_quads(mesh: bpy.types.Mesh):
-
-    # Tenta converter triangulos em quads (Tris to Quads)
-    bm = bmesh.new()
-    bm.from_mesh(mesh)
-    try:
-        bmesh.ops.join_triangles(
-            bm,
-            faces = bm.faces,
-            angle_face_threshold = 0.698132,
-            angle_shape_threshold = 0.698132
-        )
-    except:
-        pass
-    bm.to_mesh(mesh)
-    bm.free()
-    mesh.update()
+    convert_to_quads(mesh)
 
 
 def _apply_vertex_groups(obj: bpy.types.Object, vertices: list):
@@ -140,9 +75,9 @@ def build_mesh(
     prefs = get_prefs(bpy.context)
 
     # Resolve cada opção. valor local (operador) > preferência global
-    _mesh_format = mesh_format if mesh_format is not None else prefs.skn_mesh_format
-    _apply_seams = apply_seams if apply_seams is not None else prefs.skn_apply_seams
-    _use_gray_material = use_gray_material if use_gray_material is not None else prefs.skn_default_material_color
+    _mesh_format = mesh_format if mesh_format is not None else prefs.mesh_format
+    _apply_seams = apply_seams if apply_seams is not None else prefs.apply_seams
+    _use_gray_material = use_gray_material if use_gray_material is not None else prefs.default_material_color
 
     mesh = bpy.data.meshes.new(name)
     obj = bpy.data.objects.new(name, mesh)
@@ -230,9 +165,9 @@ def build_submesh_objects(skn: SKNFile, apply_weights: bool = True, *, mesh_form
     prefs = get_prefs(bpy.context)
 
     # Resolve cada opção. valor local
-    _mesh_format = mesh_format if mesh_format is not None else prefs.skn_mesh_format
-    _apply_seams = apply_seams if apply_seams is not None else prefs.skn_apply_seams
-    _use_gray_material = use_gray_material if use_gray_material is not None else prefs.skn_default_material_color
+    _mesh_format = mesh_format if mesh_format is not None else prefs.mesh_format
+    _apply_seams = apply_seams if apply_seams is not None else prefs.apply_seams
+    _use_gray_material = use_gray_material if use_gray_material is not None else prefs.default_material_color
 
     objs = []
 
@@ -309,7 +244,7 @@ def build_submesh_objects(skn: SKNFile, apply_weights: bool = True, *, mesh_form
     return objs
 
 
-# Operador
+# Operador SKN
 # -----------
 
 class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
@@ -412,11 +347,11 @@ class LEAGUEBLENDER_OT_import_skn(Operator, ImportHelper):
 
         # Pre preenche as opções locais com os valores das preferências globais
         prefs = get_prefs(context)
-        self.skn_mesh_format = prefs.skn_mesh_format
-        self.skn_apply_seams = prefs.skn_apply_seams
-        self.skn_merge_by_distance = prefs.skn_merge_by_distance
-        self.skn_merge_threshold = prefs.skn_merge_threshold
-        self.skn_default_material_color = prefs.skn_default_material_color
+        self.skn_mesh_format = prefs.mesh_format
+        self.skn_apply_seams = prefs.apply_seams
+        self.skn_merge_by_distance = prefs.merge_by_distance
+        self.skn_merge_threshold = prefs.merge_threshold
+        self.skn_default_material_color = prefs.default_material_color
         self.skn_import_as_collection = prefs.skn_import_as_collection
         return super().invoke(context, event)
 

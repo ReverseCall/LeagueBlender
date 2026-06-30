@@ -173,7 +173,7 @@ def apply_skinning(
     mesh_obj.data.update()
 
 
-# Operador
+# Operador SKL
 # -----------
 
 class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
@@ -301,11 +301,11 @@ class LEAGUEBLENDER_OT_import_skl(Operator, ImportHelper):
         prefs = get_prefs(context)
         self.skl_bone_shape = prefs.skl_bone_shape
         self.skl_show_in_front = prefs.skl_show_in_front
-        self.skn_mesh_format = prefs.skn_mesh_format
-        self.skn_apply_seams = prefs.skn_apply_seams
-        self.skn_merge_by_distance = prefs.skn_merge_by_distance
-        self.skn_merge_threshold = prefs.skn_merge_threshold
-        self.skn_default_material_color = prefs.skn_default_material_color
+        self.skn_mesh_format = prefs.mesh_format
+        self.skn_apply_seams = prefs.apply_seams
+        self.skn_merge_by_distance = prefs.merge_by_distance
+        self.skn_merge_threshold = prefs.merge_threshold
+        self.skn_default_material_color = prefs.default_material_color
         self.skn_import_as_collection = prefs.skn_import_as_collection
         return super().invoke(context, event)
 

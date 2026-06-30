@@ -6,20 +6,16 @@ Suporte atual:
   - Import: SKN (Skinned Mesh)
   - Import: SKL (Skeleton + SKN vinculado)
   - Export: SKN (Skinned Mesh + SKL vinculado)
+  - Import: SCB (Static Mesh Binary)
 
 Em desenvolvimento:
   - Melhorias no Importe de arquivos SKN e SKL
-  - Export: SKN (o arquivo final acaba ficando maior pq algns dados da Uv não batem 100% depos de ser mastigado pelo o codigo)
+  - Export: SKL (o arquivo final acaba ficando menor, por falta de alguns dados que eu tinha cortado para facilizar os testes)
   - Import: ANM (Animations) | refatorando
 
 Atualizações futuras:
-  - Import: SCO (Sla qq e isso meu fi, so quero fazer importar)
-  - Import: SCB (Script Compiled Binary)
-  -
   - Export: ANM (Animations)
-  - Import: SCO (SLA.file)
-  - Export: SCB (Script Compiled Binary)
-  -
+  - Export: SCB / SCO (Static Meshes)
 
 Talvez eu não traga o suporte para MAPGEO. :p
 """
@@ -30,7 +26,7 @@ Talvez eu não traga o suporte para MAPGEO. :p
 bl_info = {
     "name": "LeagueBlender",
     "author": "ReverseCall",
-    "version": (0, 2, 0),
+    "version": (0, 3, 0),
     "blender": (5, 0, 0),
     "location": "File > Import / File > Export",
     "warning": "Essa josa pode explodir a qualquer momento",
@@ -49,11 +45,14 @@ import bpy
 from .preferences import LeagueBlenderPreferences
 from .importers.import_skn import LEAGUEBLENDER_OT_import_skn
 from .importers.import_skl import LEAGUEBLENDER_OT_import_skl
+from .importers.import_scb import LEAGUEBLENDER_OT_import_scb
 from .exporters.export_skn import LEAGUEBLENDER_OT_export_skn
 from .i18n import t
 
 
 def menu_import(self, context):
+
+    # Importer
     self.layout.operator(
         LEAGUEBLENDER_OT_import_skn.bl_idname,
         text=t("op_import_skn_label"),
@@ -62,12 +61,15 @@ def menu_import(self, context):
         LEAGUEBLENDER_OT_import_skl.bl_idname,
         text=t("op_import_skl_label"),
     )
+    self.layout.operator(
+        LEAGUEBLENDER_OT_import_scb.bl_idname,
+        text=t("op_import_scb_label"),
+    )
 
 
 def menu_export(self, context):
 
-    # Antes era possivel exportar o SKL separado mas agora depos
-    # Que todos os testes que eu tinha para fazer acabaram eu removir isso
+    # Exporter
     self.layout.operator(
         LEAGUEBLENDER_OT_export_skn.bl_idname,
         text=t("op_export_skn_label"),
@@ -78,6 +80,7 @@ _classes = [
     LeagueBlenderPreferences,
     LEAGUEBLENDER_OT_import_skn,
     LEAGUEBLENDER_OT_import_skl,
+    LEAGUEBLENDER_OT_import_scb,
     LEAGUEBLENDER_OT_export_skn,
 ]
 

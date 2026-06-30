@@ -4,7 +4,9 @@ from bpy.props import BoolProperty, EnumProperty, FloatProperty
 from .i18n import t, save_language
 
 
-# Idiomas suportados.
+# Idiomas suportados
+# =====================
+
 LANGUAGES = [
     ("en", "English", "English"),
     ("pt-br", "Português (Brasil)", "Português (Brasil)"),
@@ -15,7 +17,7 @@ def _on_language_update(self, context):
     save_language(self.language)
 
 # Geral
-# ========
+# --------
 
 class LeagueBlenderPreferences(AddonPreferences):
     bl_idname = __package__
@@ -28,10 +30,10 @@ class LeagueBlenderPreferences(AddonPreferences):
         update=_on_language_update,
     )
 
-    # Opções de importação SKN
-    # ---------------------------
+    # Opções de importação SKN / SCB
+    # ---------------------------------
 
-    skn_mesh_format: EnumProperty(
+    mesh_format: EnumProperty(
         name=t("prop_skn_mesh_format_name"),
         description=t("prop_skn_mesh_format_desc"),
         items=[
@@ -41,19 +43,19 @@ class LeagueBlenderPreferences(AddonPreferences):
         default='TRIS',
     )
 
-    skn_apply_seams: BoolProperty(
+    apply_seams: BoolProperty(
         name=t("prop_skn_apply_seams_name"),
         description=t("prop_skn_apply_seams_desc"),
         default=False,
     )
 
-    skn_merge_by_distance: BoolProperty(
+    merge_by_distance: BoolProperty(
         name=t("prop_skn_merge_by_distance_name"),
         description=t("prop_skn_merge_by_distance_desc"),
         default=False,
     )
 
-    skn_merge_threshold: FloatProperty(
+    merge_threshold: FloatProperty(
         name=t("prop_skn_merge_threshold_name"),
         description=t("prop_skn_merge_threshold_desc"),
         default=0.001,
@@ -64,11 +66,14 @@ class LeagueBlenderPreferences(AddonPreferences):
         unit='LENGTH',
     )
 
-    skn_default_material_color: BoolProperty(
+    default_material_color: BoolProperty(
         name=t("prop_skn_default_material_color_name"),
         description=t("prop_skn_default_material_color_desc"),
         default=True,
     )
+
+    # Opções de importação exclusivas do SKN
+    # -----------------------------------------
 
     skn_import_as_collection: BoolProperty(
         name=t("prop_skn_import_as_collection_name"),
@@ -84,7 +89,7 @@ class LeagueBlenderPreferences(AddonPreferences):
         description=t("prop_skl_bone_shape_desc"),
         items=[
             ('BLENDER', t("prop_skl_bone_shape_blender_name"), t("prop_skl_bone_shape_blender_desc")),
-            ('SPHERE',  t("prop_skl_bone_shape_sphere_name"), t("prop_skl_bone_shape_sphere_desc")),
+            ('SPHERE', t("prop_skl_bone_shape_sphere_name"), t("prop_skl_bone_shape_sphere_desc")),
         ],
         default='BLENDER',
     )
@@ -127,14 +132,14 @@ class LeagueBlenderPreferences(AddonPreferences):
         box.prop(self, "language")
         box.label(text=t("prefs_restart_required"), icon='INFO')
 
-        # SKN
+        # SKN / SCB
         box = layout.box()
         box.label(text=t("prefs_skn_section"), icon='IMPORT')
 
         col = box.column(align=True)
-        col.prop(self, "skn_mesh_format")
-        col.prop(self, "skn_apply_seams")
-        col.prop(self, "skn_default_material_color")
+        col.prop(self, "mesh_format")
+        col.prop(self, "apply_seams")
+        col.prop(self, "default_material_color")
 
         col.separator()
         col.prop(self, "skn_import_as_collection")
@@ -144,12 +149,12 @@ class LeagueBlenderPreferences(AddonPreferences):
 
         # Merge by Distance não se aplica quando cada submesh vira um objeto separado
         row.enabled = not self.skn_import_as_collection
-        row.prop(self, "skn_merge_by_distance")
+        row.prop(self, "merge_by_distance")
 
         # Threshold so aparece quando Merge esta ativo
         sub = col.row(align=True)
-        sub.enabled = self.skn_merge_by_distance and not self.skn_import_as_collection
-        sub.prop(self, "skn_merge_threshold")
+        sub.enabled = self.merge_by_distance and not self.skn_import_as_collection
+        sub.prop(self, "merge_threshold")
 
         # SKL
         box = layout.box()

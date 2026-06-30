@@ -72,7 +72,7 @@ def apply_bone_shapes(
     arm = arm_obj.data
 
     if shape_type == BoneShapeType.BLENDER:
-        # Remove qualquer custom shape — volta ao padrão do Blender
+        # Remove qualquer custom shape - volta ao padrão do Blender
         for bone in arm.bones:
             pbone = arm_obj.pose.bones.get(bone.name)
             if pbone:
