@@ -66,6 +66,7 @@
     "op_export_skn_label": "League Mesh (.skn + .skl)",
     "op_import_scb_label": "League Static Mesh (.scb)",
     "op_import_scb_desc": "Importa uma Static Mesh (.scb) do League of Legends",
+    "op_export_scb_label": "League Static Mesh (.scb)",
     "msg_failed_read_skn": "Falha ao ler o SKN: {0}",
     "msg_failed_build_mesh": "Falha ao construir a mesh: {0}",
     "msg_failed_read_scb": "Falha ao ler o SCB: {0}",
@@ -73,6 +74,10 @@
     "msg_skn_imported_collection": "SKN importado como Collection: {0} - {1:,} verts, {2:,} faces, {3} submesh(es)",
     "msg_skn_imported": "SKN importado: {0} - {1:,} verts, {2:,} faces, {3} submesh(es)",
     "msg_scb_imported": "SCB importado: {0} - {1:,} verts, {2:,} faces (v{3})",
+    "msg_scb_name_dropped_non_ascii": "O nome da color attribute \"{0}\" só tinha caracteres fora do ascii - salvo sem nome em vez de um nome corrompido.",
+    "msg_scb_name_non_ascii_stripped": "O nome da color attribute \"{0}\" teve caracteres fora do ascii removidos, salvo como \"{1}\".",
+    "msg_scb_name_truncated": "O nome da color attribute \"{0}\" ({1} caracteres) excede o limite de {2} caracteres e foi truncado para \"{3}\".",
+    "msg_scb_vcp_unsupported": "Este arquivo tem {0} face(s) com cor por face (VCP), um dado que ainda não é 100% mapeado - foi lido mas não foi aplicado na mesh. Por favor reporte esse arquivo no tracker do plugin, isso ajuda bastante: https://github.com/ReverseCall/LeagueBlender/issues",
     "msg_skl_parse_error": "Erro ao interpretar o SKL: {0}",
     "msg_skn_parse_error": "Erro ao interpretar o SKN: {0}",
     "msg_armature_create_error": "Erro ao criar o armature: {0}",
@@ -98,5 +103,9 @@
     "msg_too_many_verts": "[SKN.dump]: Muitos vertices encontrados: {0}, máximo permitido: 65535 vertices.",
     "msg_skn_exported": "SKN exportado: {0} ({1}) | SKL exportado: {2}",
     "msg_scb_unknown_ext": "Extensão desconhecida: {0}. Esperado .scb",
+    "msg_scb_export_no_material": "[SCB.dump({0})]: Nenhum material atribuído a esta mesh. Atribua ao menos um material antes de exportar.",
+    "msg_scb_export_empty_material_slot": "[SCB.dump({0})]: O slot de material {1} está vazio. Preencha ou remova slots vazios antes de exportar.",
+    "msg_scb_export_multi_material": "[SCB.dump({0})]: SCB espera apenas 1 material, mas {1} estão aplicados na mesh de exportação.",
+    "msg_scb_exported": "SCB exportado: {0} ({1:,} verts, {2:,} faces) a partir de \"{3}\"",
     "msg_export_generic_error": "Erro: {0}"
 }

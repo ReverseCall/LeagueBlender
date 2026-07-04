@@ -41,7 +41,7 @@ The table below details the support status for importing and exporting League of
 | **Skeleton** (`.SKL`)           | ✅ | ✅ |
 | **Animation** (`.ANM`)          | 🔨 | 🔨 |
 | **Static Mesh** (`SCO`)         | 📂 | 📂 |
-| **Static Mesh Binary** (`.SCB`) | ✅ | 🔨 |
+| **Static Mesh Binary** (`.SCB`) | ✅ | ✅ |
 | **Map Geometry** (`.MAPGEO`)    | ❌ | ❌ |
 
 > [!WARNING]  
@@ -118,12 +118,18 @@ This option allows you to import the mesh (`.scb`) of models. With it, you can p
 <details>
 <summary><b>📂 How to Export Files</b></summary>
 <br/>
-## 
 
 ### Export a Mesh (.SKN + .SKL)
 
 * Select the desired mesh or part of the submesh.
 * Go to: `File` > `Export` > `League Mesh (.skn + .skl)`
+* Choose the destination folder.
+* Click Export.
+
+### Export a Static Mesh (.SCB)
+
+* Select the desired mesh.
+* Go to: `File` > `Export` > `Static Mesh Binary (.scb)`
 * Choose the destination folder.
 * Click Export.
 

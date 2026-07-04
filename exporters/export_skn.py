@@ -1,6 +1,5 @@
 import os
 import bpy
-import bmesh
 
 from bpy.types import Operator
 from bpy.props import StringProperty
@@ -10,6 +9,7 @@ from ..i18n import t
 from ..formats.skn import write_skn_binary
 from .export_skl import dump_skl_from_armature
 from ..formats.skl import write_skl_binary
+from ..formats.shared_mesh import validate_material_slots, enforce_material_name_limit, triangulate_to_temp_mesh
 
 # UV fora da janela
 _UV_STUB_X = -10.0
@@ -86,33 +86,6 @@ def _get_vertex_weights(v_idx: int, mesh_obj: bpy.types.Object, bone_to_idx: dic
 # Validações de pre-exportação
 # -------------------------------
 
-# Limite de nome de material no formato SKN
-_MAX_MATERIAL_NAME_LEN = 63
-
-
-def _enforce_material_name_limit(mesh_obj: bpy.types.Object, warnings: list) -> None:
-
-    # Corrige nomes de materias maiores que 63 e renomeia o material original e UV layer
-    for slot in mesh_obj.material_slots:
-        mat = slot.material
-        if mat is None:
-            continue
-
-        if len(mat.name) <= _MAX_MATERIAL_NAME_LEN:
-            continue
-
-        old_name = mat.name
-        new_name = old_name[:_MAX_MATERIAL_NAME_LEN]
-
-        # Evita colisao com outro material/datablock que ja tenha esse nome truncado
-        if new_name in bpy.data.materials and bpy.data.materials[new_name] != mat:
-            mat.name = new_name  # bpy resolve o conflito sozinho
-        else:
-            mat.name = new_name
-
-        warnings.append(t("msg_material_renamed", old_name, len(old_name), _MAX_MATERIAL_NAME_LEN, mat.name))
-
-
 def _sync_uv_layer_names(mesh_obj: bpy.types.Object, warnings: list) -> tuple[bool, str]:
 
     # ___ Tratamento UV layers ___
@@ -177,15 +150,7 @@ def _validate_mesh_for_export(mesh_obj: bpy.types.Object) -> tuple[bool, str]:
     if arm_obj is None:
         return False, t("msg_export_no_armature", mesh_obj.name)
 
-    # Verificação de materiais para evitar erros
-    if len(mesh_obj.material_slots) == 0:
-        return False, t("msg_export_no_material", mesh_obj.name)
-
-    for i, slot in enumerate(mesh_obj.material_slots):
-        if slot.material is None:
-            return False, t("msg_export_empty_material_slot", mesh_obj.name, i)
-
-    return True, ""
+    return validate_material_slots(mesh_obj)
 
 
 # Reconhecimento de submeshes por armature
@@ -235,14 +200,7 @@ def _merge_submeshes_by_name(submeshes: list) -> list:
 def dump_skn_from_mesh(mesh_obj: bpy.types.Object, bone_to_idx: dict) -> list:
 
     # ___ Triangulação ___
-    bm = bmesh.new()
-    bm.from_mesh(mesh_obj.data)
-    bmesh.ops.triangulate(bm, faces=bm.faces)
-
-    temp_mesh = bpy.data.meshes.new("_lb_export_temp")
-    bm.to_mesh(temp_mesh)
-    bm.free()
-    temp_mesh.update()
+    temp_mesh = triangulate_to_temp_mesh(mesh_obj, "_lb_export_temp")
 
     uv_layers = temp_mesh.uv_layers
     num_materials = max(1, len(mesh_obj.material_slots))
@@ -388,7 +346,7 @@ class LEAGUEBLENDER_OT_export_skn(Operator, ExportHelper):
             # Renomeia materiais com nome > 63 caracteres ANTES de extrair submeshes
             export_warnings = []
             for obj in mesh_objs:
-                _enforce_material_name_limit(obj, export_warnings)
+                enforce_material_name_limit(obj, export_warnings)
 
             # Garante que UV layer e material tenham o mesmo nome
             for obj in mesh_objs:

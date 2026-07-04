@@ -1,3 +1,9 @@
+""""
+Talvez eu tenha exagerado um pouquinho nas verificações .w. como analisei apenas 7 arquivos SCB,
+preferi assumir o pior cenario e preservar o maximo de informação possível. Isso deve tornar o codigo
+mais resistente a variações e surpresas que eu possa ter deixado passar
+"""
+
 import os
 import bpy
 from bpy.types import Operator
@@ -5,11 +11,35 @@ from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, FloatProperty
 
 from ..preferences import get_prefs
+from ..formats.scb import invert_winding
 from ..utils.mesh_utils import merge_by_distance
 from ..utils.scene_setup import apply_clip_end_on_first_import, mark_imported
 from ..utils.uv_seams import compute_seam_edges_scb, apply_seams as _apply_seams_to_mesh
-from ..formats.shared_mesh import make_base_material, convert_to_quads, apply_weighted_normal
+
+from ..formats.shared_mesh import (
+    make_base_material,
+    convert_to_quads,
+    apply_weighted_normal,
+    create_vertex_color_layer,
+    create_alpha_attribute,
+    flip_uv
+)
 from ..i18n import t
+
+_DEFAULT_VCOLOR_NAME = "VertexColor"
+_FALLBACK_UV_LAYER_NAME = "UVMap"
+
+
+def _resolve_scb_uv_layer_name(scb) -> str:
+    stripped_name = scb.name.strip() if scb.name else ""
+    if stripped_name:
+        return stripped_name
+
+    materials = {f.material.strip() for f in scb.faces if f.material and f.material.strip()}
+    if len(materials) == 1:
+        return next(iter(materials))
+
+    return _FALLBACK_UV_LAYER_NAME
 
 
 # Leitor
@@ -31,8 +61,7 @@ def _write_uvs_scb(mesh: bpy.types.Mesh, faces_orig, uv_layer):
             vi = mesh.loops[loop_idx].vertex_index
             uv = uv_by_vert.get(vi)
             if uv is not None:
-                u, v = uv
-                uv_layer.data[loop_idx].uv = (u, 1.0 - v)
+                uv_layer.data[loop_idx].uv = flip_uv(*uv)
 
 
 # Construção SCB
@@ -49,7 +78,9 @@ def build_mesh_from_scb(scb, name: str, *, mesh_format: str | None = None, use_g
     mesh = bpy.data.meshes.new(name)
     obj  = bpy.data.objects.new(name, mesh)
 
-    positions = [v.position for v in scb.vertices]
+    # ___ Pivô (central_point) ___
+    cx, cy, cz = scb.central_point
+    positions = [(px - cx, py - cy, pz - cz) for px, py, pz in (v.position for v in scb.vertices)]
     n_verts = len(positions)
 
     valid_faces = [
@@ -62,24 +93,45 @@ def build_mesh_from_scb(scb, name: str, *, mesh_format: str | None = None, use_g
         and f.indices[2] < n_verts
     ]
 
-    faces_idx = [f.indices for f in valid_faces]
+    faces_idx = [invert_winding(f.indices) for f in valid_faces]
 
     mesh.from_pydata(positions, [], faces_idx)
     mesh.update()
+
+    # ___ Nome da UV Layer ___
+    uv_layer_name = _resolve_scb_uv_layer_name(scb)
 
     # Materiais
     mat_name_to_idx: dict = {}
     for fi, face in enumerate(valid_faces):
         m = face.material
         if m not in mat_name_to_idx:
-            mat = make_base_material(m, use_gray=use_gray_material)
+            mat = make_base_material(m, uv_layer_name=uv_layer_name, use_gray=use_gray_material)
             mesh.materials.append(mat)
             mat_name_to_idx[m] = len(mesh.materials) - 1
         mesh.polygons[fi].material_index = mat_name_to_idx[m]
 
-    uv_layer = mesh.uv_layers.new(name="UVMap")
+    uv_layer = mesh.uv_layers.new(name=uv_layer_name)
     _write_uvs_scb(mesh, valid_faces, uv_layer)
     uv_layer.active = True
+
+    # ___ Vertex Colors ___
+    if scb.vertex_colors:
+        rgb_values = {(b, g, r) for b, g, r, a in scb.vertex_colors}
+        has_real_color = rgb_values != {(255, 255, 255)}
+
+        if has_real_color:
+            stripped_name = scb.name.strip() if scb.name else ""
+
+            if stripped_name and stripped_name != _DEFAULT_VCOLOR_NAME:
+                color_name = stripped_name
+            else:
+                color_name = _DEFAULT_VCOLOR_NAME
+            create_vertex_color_layer(mesh, color_name, scb.vertex_colors)
+
+        # Alpha separado numa color attribute "Alpha" (tom de cinza), editavel no Vertex Paint
+        alphas = [c[3] for c in scb.vertex_colors]  # (b, g, r, a) -> a
+        create_alpha_attribute(mesh, alphas)
 
     mesh.update()
 
@@ -94,6 +146,8 @@ def build_mesh_from_scb(scb, name: str, *, mesh_format: str | None = None, use_g
 
     # ___ WeightedNormal ___
     apply_weighted_normal(obj)
+
+    obj.location = (cx, cy, cz)
 
     return obj
 
@@ -240,5 +294,13 @@ class LEAGUEBLENDER_OT_import_scb(Operator, ImportHelper):
             return None
 
         self.report({'INFO'}, t("msg_scb_imported", name, len(scb.vertices), len(scb.faces), scb.version_str))
+
+        # ___ VCP (cor por face-corner) ___
+        # Não achei nem uma referencia disso nos binarios analizados. Por isso vou deixar um aviso para caso alguem achar
+        # me passar para eu analizar
+        vcp_face_count = sum(1 for f in scb.faces if f.vcp is not None)
+        if vcp_face_count > 0:
+            self.report({'WARNING'}, t("msg_scb_vcp_unsupported", vcp_face_count))
+
         return obj
     

@@ -6,7 +6,7 @@ Suporte atual:
   - Import: SKN (Skinned Mesh)
   - Import: SKL (Skeleton + SKN vinculado)
   - Export: SKN (Skinned Mesh + SKL vinculado)
-  - Import: SCB (Static Mesh Binary)
+  - Import/Export: SCB (Static Mesh Binary)
 
 Em desenvolvimento:
   - Melhorias no Importe de arquivos SKN e SKL
@@ -15,7 +15,7 @@ Em desenvolvimento:
 
 Atualizações futuras:
   - Export: ANM (Animations)
-  - Export: SCB / SCO (Static Meshes)
+  - Volta fazendo uma refatoração e adicionando os Byte removidos para simplificação
 
 Talvez eu não traga o suporte para MAPGEO. :p
 """
@@ -26,10 +26,9 @@ Talvez eu não traga o suporte para MAPGEO. :p
 bl_info = {
     "name": "LeagueBlender",
     "author": "ReverseCall",
-    "version": (0, 3, 0),
+    "version": (0, 4, 0),
     "blender": (5, 0, 0),
     "location": "File > Import / File > Export",
-    "warning": "Essa josa pode explodir a qualquer momento",
     "description": "Imports and exports the formats supported by League Of Legends",
     "doc_url": "https://github.com/ReverseCall/LeagueBlender",
     "tracker_url": "https://github.com/ReverseCall/LeagueBlender/issues",
@@ -47,6 +46,7 @@ from .importers.import_skn import LEAGUEBLENDER_OT_import_skn
 from .importers.import_skl import LEAGUEBLENDER_OT_import_skl
 from .importers.import_scb import LEAGUEBLENDER_OT_import_scb
 from .exporters.export_skn import LEAGUEBLENDER_OT_export_skn
+from .exporters.export_scb import LEAGUEBLENDER_OT_export_scb
 from .i18n import t
 
 
@@ -74,6 +74,10 @@ def menu_export(self, context):
         LEAGUEBLENDER_OT_export_skn.bl_idname,
         text=t("op_export_skn_label"),
     )
+    self.layout.operator(
+        LEAGUEBLENDER_OT_export_scb.bl_idname,
+        text=t("op_export_scb_label"),
+    )
 
 
 _classes = [
@@ -82,6 +86,7 @@ _classes = [
     LEAGUEBLENDER_OT_import_skl,
     LEAGUEBLENDER_OT_import_scb,
     LEAGUEBLENDER_OT_export_skn,
+    LEAGUEBLENDER_OT_export_scb,
 ]
 
 

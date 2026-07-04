@@ -28,6 +28,21 @@ class SCBFace:
     vcp: Optional[tuple] = None
 
 
+def flip_point(x: float, y: float, z: float) -> tuple:
+    return (-x, -z, y)
+
+
+def unflip_point(x: float, y: float, z: float) -> tuple:
+    return (-x, z, -y)
+
+
+def invert_winding(indices: tuple) -> tuple:
+
+    # Inverte o winding das faces para manter as normais corretas
+    i0, i1, i2 = indices
+    return (i0, i2, i1)
+
+
 @dataclass
 class SCBFile:
     version_major: int
@@ -55,10 +70,19 @@ class SCBFile:
     def flip(self):
 
         # Converte do espaço do jogo para o espaço do Blender
-        # Rotação (det +1)
         for v in self.vertices:
-            x, y, z = v.position
-            v.position = (x, -z, y)
+            v.position = flip_point(*v.position)
+
+        # central_point usa a mesma conversão de eixos que os vertices
+        self.central_point = flip_point(*self.central_point)
+
+    def unflip(self):
+
+        # Converte do espaço do Blender de volta para o espaço do jogo.
+        for v in self.vertices:
+            v.position = unflip_point(*v.position)
+
+        self.central_point = unflip_point(*self.central_point)
 
 
 # BinaryStream
@@ -204,4 +228,86 @@ def read_scb(path: str) -> "SCBFile":
         vertex_colors = vertex_colors,
     )
 
+
+# Serialização binaria
+# ----------------------
+
+def _no_negative_zero(vec: tuple) -> tuple:
+
+    # Normaliza -0.0 para 0.0 (evita diferença de bits sem diferença de valor)
+    return tuple(0.0 if c == 0.0 else c for c in vec)
+
+
+def write_scb_binary(
+    vertices: List[tuple],
+    faces: List[dict],
+    path: str,
+    *,
+    central_point: tuple = (0.0, 0.0, 0.0),
+    flags: int = SCB_FLAG_HAS_LOCAL_ORIGIN_LOCATOR_PIVOT,
+    vertex_colors: Optional[List[tuple]] = None,
+    name: str = "",
+):
+
+    # Escreve um SCB v3.2; "name" (128 bytes) preserva o nome da color attribute entre import/export.
+    vertex_count = len(vertices)
+    face_count = len(faces)
+
+    # Bounding box recalculada a partir dos vertices (ja em espaço de jogo)   | futuramente volta aqui para fazer melhorias visual para o usuario
+    if vertex_count > 0:
+        xs = [v[0] for v in vertices]
+        ys = [v[1] for v in vertices]
+        zs = [v[2] for v in vertices]
+        bb_min = (min(xs), min(ys), min(zs))
+        bb_max = (max(xs), max(ys), max(zs))
+    else:
+        bb_min = (0.0, 0.0, 0.0)
+        bb_max = (0.0, 0.0, 0.0)
+
+    has_vertex_colors = vertex_colors is not None
+    has_vcp = bool(flags & SCB_FLAG_HAS_VCP)
+
+    with open(path, 'wb') as f:
+
+        # ___ Cabeçalho ___
+        f.write(SCB_MAGIC)
+        f.write(struct.pack('<HH', 3, 2))
+
+        name_bytes = name.encode('ascii', errors='ignore')[:127]
+        f.write(name_bytes + b'\x00' * (128 - len(name_bytes)))
+
+        f.write(struct.pack('<iiI', vertex_count, face_count, flags))
+
+        f.write(struct.pack('<3f', *bb_min))
+        f.write(struct.pack('<3f', *bb_max))
+
+        f.write(struct.pack('<I', 1 if has_vertex_colors else 0))
+
+        # ___ Vertices ___
+        for v in vertices:
+            f.write(struct.pack('<3f', *_no_negative_zero(v)))
+
+        # Cores de vértice (array por vertice)
+        if has_vertex_colors:
+            for c in vertex_colors:
+                f.write(bytes(c))  # b, g, r, a
+
+        # ___ Ponto central ___
+        f.write(struct.pack('<3f', *_no_negative_zero(central_point)))
+
+        # ___ Faces ___
+        for face in faces:
+            f.write(struct.pack('<3I', *face["indices"]))
+
+            mat_bytes = face["material"].encode('ascii', errors='ignore')[:63]
+            f.write(mat_bytes + b'\x00' * (64 - len(mat_bytes)))
+
+            (u0, v0), (u1, v1), (u2, v2) = face["uvs"]
+            f.write(struct.pack('<6f', u0, u1, u2, v0, v1, v2))
+
+            if has_vcp:
+                vcp = face.get("vcp") or ((255, 255, 255), (255, 255, 255), (255, 255, 255))
+                for c in vcp:
+                    f.write(bytes(c))
+                    
 
