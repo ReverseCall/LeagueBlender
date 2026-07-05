@@ -9,6 +9,19 @@ import bmesh
 from ..i18n import t
 
 
+# Material placeholder 2000!
+# -----------------------------
+
+PLACEHOLDER_MATERIAL_NAME = "leagueblender"
+
+
+def is_placeholder_material(mat: bpy.types.Material | None) -> bool:
+
+    if mat is None:
+        return False
+    return mat.name == PLACEHOLDER_MATERIAL_NAME or mat.name.startswith(PLACEHOLDER_MATERIAL_NAME + ".")
+
+
 # Cor cinza padrao do LeagueBlender
 # ------------------------------------
 
@@ -245,10 +258,14 @@ def create_alpha_attribute(mesh: bpy.types.Mesh, alphas_0_255: list) -> bpy.type
 def find_main_color_attribute(mesh: bpy.types.Mesh) -> bpy.types.Attribute | None:
 
     # Acha a color attribute "principal"
+    def _is_excluded(c) -> bool:
+        name = c.name.lower()
+        return name == ALPHA_ATTR_NAME.lower() or name == VCP_ATTR_NAME.lower()
+
     active = mesh.color_attributes.active_color
-    if active is not None and active.name.lower() != ALPHA_ATTR_NAME.lower():
+    if active is not None and not _is_excluded(active):
         return active
-    return next((c for c in mesh.color_attributes if c.name.lower() != ALPHA_ATTR_NAME.lower()), None)
+    return next((c for c in mesh.color_attributes if not _is_excluded(c)), None)
 
 
 def read_vertex_color_layer(mesh: bpy.types.Mesh, layer: bpy.types.Attribute = None) -> list | None:
@@ -312,3 +329,46 @@ def merge_alpha(vertex_colors_bgra: list, alphas_0_255: list) -> list:
     return merged
 
 
+# VCP - exclusivo do SCB
+# -------------------------
+
+VCP_ATTR_NAME = "VCP"
+
+
+def find_vcp_attribute(mesh: bpy.types.Mesh) -> bpy.types.Attribute | None:
+
+    # Busca a color attribute VCP só pelo nome
+    for c in mesh.color_attributes:
+        if c.name.lower() == VCP_ATTR_NAME.lower():
+            return c
+    return None
+
+
+def read_vcp_corner(mesh: bpy.types.Mesh, layer: bpy.types.Attribute, loop_index: int) -> tuple:
+
+    # Le a cor do loop. ou do vrrtice se a VCP estiver em POINT
+    if layer.domain == 'CORNER':
+        r, g, b, _a = layer.data[loop_index].color_srgb
+    else:
+        vertex_index = mesh.loops[loop_index].vertex_index
+        r, g, b, _a = layer.data[vertex_index].color_srgb
+
+    return (_clamp_255(r), _clamp_255(g), _clamp_255(b))
+
+
+def create_vcp_layer(mesh: bpy.types.Mesh, faces_vcp: list) -> bpy.types.Attribute | None:
+
+    if not any(v is not None for v in faces_vcp):
+        return None
+
+    layer = mesh.color_attributes.new(name = VCP_ATTR_NAME, type = 'BYTE_COLOR', domain = 'CORNER')
+
+    for fi, vcp in enumerate(faces_vcp):
+        if vcp is None or fi >= len(mesh.polygons):
+            continue
+
+        loop_indices = mesh.polygons[fi].loop_indices
+        for li, (r, g, b) in zip(loop_indices, vcp):
+            layer.data[li].color_srgb = (r / 255.0, g / 255.0, b / 255.0, 1.0)
+
+    return layer

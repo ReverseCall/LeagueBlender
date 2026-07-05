@@ -154,8 +154,10 @@ def read_scb(path: str) -> "SCBFile":
     version_major = bs.read_uint16()
     version_minor = bs.read_uint16()
 
-    if (version_major, version_minor) not in ((2, 1), (3, 2)):
-        raise ValueError(f"Versão SCB não suportada: {version_major}.{version_minor}. Suportadas: 2.1 e 3.2.")
+    if version_major == 2:
+        pass
+    elif not (version_major == 3 and version_minor == 2):
+        raise ValueError(f"Versão SCB não suportada: {version_major}.{version_minor}. Suportadas: 2.x e 3.2.")
 
     mesh_name = bs.read_padded_ascii(128)
     vertex_count = bs.read_int32()
@@ -202,19 +204,20 @@ def read_scb(path: str) -> "SCBFile":
         u0, u1, u2, v0, v1, v2 = bs.read_float_n(6)
         uvs = ((u0, v0), (u1, v1), (u2, v2))
 
-        vcp: Optional[tuple] = None
-        if has_vcp:
-            c0 = (bs.read_uint8(), bs.read_uint8(), bs.read_uint8())
-            c1 = (bs.read_uint8(), bs.read_uint8(), bs.read_uint8())
-            c2 = (bs.read_uint8(), bs.read_uint8(), bs.read_uint8())
-            vcp = (c0, c1, c2)
-
         faces.append(SCBFace(
             indices = indices,
             material = material,
             uvs = uvs,
-            vcp = vcp,
+            vcp = None,
         ))
+
+    # ___ VCP ___
+    if has_vcp:
+        for face in faces:
+            c0 = (bs.read_uint8(), bs.read_uint8(), bs.read_uint8())
+            c1 = (bs.read_uint8(), bs.read_uint8(), bs.read_uint8())
+            c2 = (bs.read_uint8(), bs.read_uint8(), bs.read_uint8())
+            face.vcp = (c0, c1, c2)
 
     return SCBFile(
         version_major = version_major,
@@ -305,9 +308,9 @@ def write_scb_binary(
             (u0, v0), (u1, v1), (u2, v2) = face["uvs"]
             f.write(struct.pack('<6f', u0, u1, u2, v0, v1, v2))
 
-            if has_vcp:
+        # ___ VCP ___
+        if has_vcp:
+            for face in faces:
                 vcp = face.get("vcp") or ((255, 255, 255), (255, 255, 255), (255, 255, 255))
                 for c in vcp:
                     f.write(bytes(c))
-                    
-

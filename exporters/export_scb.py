@@ -6,17 +6,26 @@ from bpy.props import StringProperty
 from bpy_extras.io_utils import ExportHelper
 
 from ..i18n import t
-from ..formats.scb import write_scb_binary, unflip_point, invert_winding, SCB_FLAG_HAS_LOCAL_ORIGIN_LOCATOR_PIVOT
+from ..formats.scb import (
+    write_scb_binary,
+    unflip_point,
+    invert_winding,
+    SCB_FLAG_HAS_LOCAL_ORIGIN_LOCATOR_PIVOT,
+    SCB_FLAG_HAS_VCP,
+)
 
 from ..formats.shared_mesh import (
     read_vertex_color_layer,
     read_alpha_attribute,
     merge_alpha,
     find_main_color_attribute,
-    validate_material_slots,
+    find_vcp_attribute,
+    read_vcp_corner,
     enforce_material_name_limit,
     triangulate_to_temp_mesh,
     flip_uv,
+    PLACEHOLDER_MATERIAL_NAME,
+    is_placeholder_material,
     )
 
 
@@ -48,24 +57,56 @@ def _sanitize_scb_name(name: str) -> tuple[str, str | None]:
     return ascii_name, None
 
 
+def classify_scb_export_materials(mesh_obj: bpy.types.Object) -> tuple[set, bool]:
+
+    # Analisa os poligonos da mesh
+    real_names: set = set()
+    has_no_material = False
+
+    mesh = mesh_obj.data
+    num_slots = len(mesh_obj.material_slots)
+
+    for poly in mesh.polygons:
+        mat = None
+        if 0 <= poly.material_index < num_slots:
+            mat = mesh_obj.material_slots[poly.material_index].material
+
+        if mat is None or is_placeholder_material(mat):
+            has_no_material = True
+        else:
+            real_names.add(mat.name)
+
+    return real_names, has_no_material
+
+
 def _validate_mesh_for_export_scb(mesh_obj: bpy.types.Object) -> tuple[bool, str]:
-    return validate_material_slots(
-        mesh_obj,
-        no_material_key = "msg_scb_export_no_material",
-        empty_slot_key = "msg_scb_export_empty_material_slot",
-    )
+
+    # Validador dos materiais aplicados a mesh para proteger o usuario do usuario
+    real_names, has_no_material = classify_scb_export_materials(mesh_obj)
+
+    if len(real_names) > 1:
+        return False, t("msg_scb_export_multi_material", mesh_obj.name, len(real_names))
+
+    if real_names and has_no_material:
+        return False, t("msg_scb_export_mixed_material", mesh_obj.name)
+
+    return True, ""
 
 
 # Extração da Mesh
 # -------------------
 
-def dump_scb_from_mesh(mesh_obj: bpy.types.Object) -> tuple[list, list, list | None, str]:
+def dump_scb_from_mesh(mesh_obj: bpy.types.Object) -> tuple[list, list, list | None, str, bool]:
 
     # ___ Triangulação ___
     temp_mesh = triangulate_to_temp_mesh(mesh_obj, "_lb_export_temp_scb")
 
     uv_layer = temp_mesh.uv_layers.active or (temp_mesh.uv_layers[0] if temp_mesh.uv_layers else None)
     num_materials = max(1, len(mesh_obj.material_slots))
+
+    # ___ VCP ___
+    vcp_layer = find_vcp_attribute(temp_mesh)
+    has_vcp_data = vcp_layer is not None
 
     # ___ Pivô ___
     lx, ly, lz = mesh_obj.location
@@ -77,9 +118,11 @@ def dump_scb_from_mesh(mesh_obj: bpy.types.Object) -> tuple[list, list, list | N
     for poly in temp_mesh.polygons:
         mat_idx = min(poly.material_index, num_materials - 1)
 
-        mat_name = "Default"
-        if mat_idx < len(mesh_obj.material_slots) and mesh_obj.material_slots[mat_idx].material:
-            mat_name = mesh_obj.material_slots[mat_idx].material.name
+        mat_name = ""
+        if mat_idx < len(mesh_obj.material_slots):
+            mat = mesh_obj.material_slots[mat_idx].material
+            if mat is not None and not is_placeholder_material(mat):
+                mat_name = mat.name
 
         loop_indices = list(invert_winding(tuple(poly.loop_indices)))
         idxs = tuple(temp_mesh.loops[li].vertex_index for li in loop_indices)
@@ -92,7 +135,11 @@ def dump_scb_from_mesh(mesh_obj: bpy.types.Object) -> tuple[list, list, list | N
             else:
                 uvs.append((0.0, 0.0))
 
-        faces.append({"indices": idxs, "material": mat_name, "uvs": tuple(uvs)})
+        vcp = None
+        if vcp_layer is not None:
+            vcp = tuple(read_vcp_corner(temp_mesh, vcp_layer, li) for li in loop_indices)
+
+        faces.append({"indices": idxs, "material": mat_name, "uvs": tuple(uvs), "vcp": vcp})
 
     # ___ Vertex Colors ___
     color_layer = find_main_color_attribute(temp_mesh)
@@ -108,7 +155,7 @@ def dump_scb_from_mesh(mesh_obj: bpy.types.Object) -> tuple[list, list, list | N
 
     bpy.data.meshes.remove(temp_mesh)
 
-    return vertices, faces, vertex_colors, color_name
+    return vertices, faces, vertex_colors, color_name, has_vcp_data
 
 
 # Operador
@@ -137,11 +184,7 @@ class LEAGUEBLENDER_OT_export_scb(Operator, ExportHelper):
             # Renomeia materiais com nome > 63 caracteres
             enforce_material_name_limit(mesh_obj, export_warnings)
 
-            mat_names = {slot.material.name for slot in mesh_obj.material_slots if slot.material}
-            if len(mat_names) > 1:
-                export_warnings.append(t("msg_scb_export_multi_material", mesh_obj.name, len(mat_names)))
-
-            vertices, faces, vertex_colors, color_name = dump_scb_from_mesh(mesh_obj)
+            vertices, faces, vertex_colors, color_name, has_vcp_data = dump_scb_from_mesh(mesh_obj)
 
             color_name, name_warning = _sanitize_scb_name(color_name)
             if name_warning:
@@ -151,12 +194,16 @@ class LEAGUEBLENDER_OT_export_scb(Operator, ExportHelper):
             lx, ly, lz = mesh_obj.location
             central_point = unflip_point(lx, ly, lz)
 
+            flags = SCB_FLAG_HAS_LOCAL_ORIGIN_LOCATOR_PIVOT
+            if has_vcp_data:
+                flags |= SCB_FLAG_HAS_VCP
+
             write_scb_binary(
                 vertices,
                 faces,
                 self.filepath,
                 central_point = central_point,
-                flags = SCB_FLAG_HAS_LOCAL_ORIGIN_LOCATOR_PIVOT,
+                flags = flags,
                 vertex_colors = vertex_colors,
                 name = color_name,
             )

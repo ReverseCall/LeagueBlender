@@ -22,22 +22,54 @@ from ..formats.shared_mesh import (
     apply_weighted_normal,
     create_vertex_color_layer,
     create_alpha_attribute,
-    flip_uv
+    create_vcp_layer,
+    flip_uv,
+    PLACEHOLDER_MATERIAL_NAME,
 )
 from ..i18n import t
 
 _DEFAULT_VCOLOR_NAME = "VertexColor"
 _FALLBACK_UV_LAYER_NAME = "UVMap"
 
+# Limite seguro para nomes de camadas sem explodir o buffer do blender (de novo...)
+_MAX_LAYER_NAME_LEN = 63
+
+
+def _sanitize_layer_name(name: str, fallback: str) -> str:
+
+    # O campo "name" do SCB as vezes traz lixo de pipeline
+    if not name:
+        return fallback
+
+    name = name.strip()
+    if not name:
+        return fallback
+
+    looks_like_path = "\\" in name or "/" in name
+    looks_like_filename = name.lower().endswith((".dae", ".mesh", ".fbx", ".ma", ".max"))
+    if looks_like_path or looks_like_filename:
+        return fallback
+
+    # Trunca com segurança em uma fronteira de caractere valida em UTF-8
+    encoded = name.encode("utf-8")[:_MAX_LAYER_NAME_LEN]
+    safe_name = encoded.decode("utf-8", errors="ignore").strip()
+
+    return safe_name or fallback
+
 
 def _resolve_scb_uv_layer_name(scb) -> str:
-    stripped_name = scb.name.strip() if scb.name else ""
-    if stripped_name:
-        return stripped_name
 
     materials = {f.material.strip() for f in scb.faces if f.material and f.material.strip()}
     if len(materials) == 1:
-        return next(iter(materials))
+        safe_material = _sanitize_layer_name(next(iter(materials)), "")
+        if safe_material:
+            return safe_material
+
+    stripped_name = scb.name.strip() if scb.name else ""
+    if stripped_name:
+        safe_name = _sanitize_layer_name(stripped_name, "")
+        if safe_name:
+            return safe_name
 
     return _FALLBACK_UV_LAYER_NAME
 
@@ -104,12 +136,25 @@ def build_mesh_from_scb(scb, name: str, *, mesh_format: str | None = None, use_g
     # Materiais
     mat_name_to_idx: dict = {}
     for fi, face in enumerate(valid_faces):
-        m = face.material
+        m = face.material.strip() if face.material else ""
+
+        if not m:
+
+            # Garantia que mesmo sem um material aplicado o show do LeagueBlender vai continuar
+            m = PLACEHOLDER_MATERIAL_NAME
+
         if m not in mat_name_to_idx:
             mat = make_base_material(m, uv_layer_name=uv_layer_name, use_gray=use_gray_material)
             mesh.materials.append(mat)
             mat_name_to_idx[m] = len(mesh.materials) - 1
         mesh.polygons[fi].material_index = mat_name_to_idx[m]
+
+    # ___ VCP ___
+    faces_vcp = [
+        (face.vcp[0], face.vcp[2], face.vcp[1]) if face.vcp is not None else None
+        for face in valid_faces
+    ]
+    create_vcp_layer(mesh, faces_vcp)
 
     uv_layer = mesh.uv_layers.new(name=uv_layer_name)
     _write_uvs_scb(mesh, valid_faces, uv_layer)
@@ -121,12 +166,19 @@ def build_mesh_from_scb(scb, name: str, *, mesh_format: str | None = None, use_g
         has_real_color = rgb_values != {(255, 255, 255)}
 
         if has_real_color:
-            stripped_name = scb.name.strip() if scb.name else ""
 
-            if stripped_name and stripped_name != _DEFAULT_VCOLOR_NAME:
-                color_name = stripped_name
-            else:
-                color_name = _DEFAULT_VCOLOR_NAME
+            # Mesma prioridade usada na UV
+            materials = {f.material.strip() for f in valid_faces if f.material and f.material.strip()}
+            color_name = ""
+            if len(materials) == 1:
+                color_name = _sanitize_layer_name(next(iter(materials)), "")
+
+            if not color_name:
+                stripped_name = scb.name.strip() if scb.name else ""
+                if stripped_name:
+                    color_name = _sanitize_layer_name(stripped_name, "")
+
+            color_name = color_name or _DEFAULT_VCOLOR_NAME
             create_vertex_color_layer(mesh, color_name, scb.vertex_colors)
 
         # Alpha separado numa color attribute "Alpha" (tom de cinza), editavel no Vertex Paint
@@ -294,13 +346,6 @@ class LEAGUEBLENDER_OT_import_scb(Operator, ImportHelper):
             return None
 
         self.report({'INFO'}, t("msg_scb_imported", name, len(scb.vertices), len(scb.faces), scb.version_str))
-
-        # ___ VCP (cor por face-corner) ___
-        # Não achei nem uma referencia disso nos binarios analizados. Por isso vou deixar um aviso para caso alguem achar
-        # me passar para eu analizar
-        vcp_face_count = sum(1 for f in scb.faces if f.vcp is not None)
-        if vcp_face_count > 0:
-            self.report({'WARNING'}, t("msg_scb_vcp_unsupported", vcp_face_count))
 
         return obj
     

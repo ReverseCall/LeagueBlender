@@ -77,7 +77,6 @@
     "msg_scb_name_dropped_non_ascii": "O nome da color attribute \"{0}\" só tinha caracteres fora do ascii - salvo sem nome em vez de um nome corrompido.",
     "msg_scb_name_non_ascii_stripped": "O nome da color attribute \"{0}\" teve caracteres fora do ascii removidos, salvo como \"{1}\".",
     "msg_scb_name_truncated": "O nome da color attribute \"{0}\" ({1} caracteres) excede o limite de {2} caracteres e foi truncado para \"{3}\".",
-    "msg_scb_vcp_unsupported": "Este arquivo tem {0} face(s) com cor por face (VCP), um dado que ainda não é 100% mapeado - foi lido mas não foi aplicado na mesh. Por favor reporte esse arquivo no tracker do plugin, isso ajuda bastante: https://github.com/ReverseCall/LeagueBlender/issues",
     "msg_skl_parse_error": "Erro ao interpretar o SKL: {0}",
     "msg_skn_parse_error": "Erro ao interpretar o SKN: {0}",
     "msg_armature_create_error": "Erro ao criar o armature: {0}",
@@ -106,6 +105,7 @@
     "msg_scb_export_no_material": "[SCB.dump({0})]: Nenhum material atribuído a esta mesh. Atribua ao menos um material antes de exportar.",
     "msg_scb_export_empty_material_slot": "[SCB.dump({0})]: O slot de material {1} está vazio. Preencha ou remova slots vazios antes de exportar.",
     "msg_scb_export_multi_material": "[SCB.dump({0})]: SCB espera apenas 1 material, mas {1} estão aplicados na mesh de exportação.",
+    "msg_scb_export_mixed_material": "[SCB.dump({0})]: A mesh tem material aplicado apenas em algumas faces. Por favor, remova o material ou defina um para todas antes de exportar.",
     "msg_scb_exported": "SCB exportado: {0} ({1:,} verts, {2:,} faces) a partir de \"{3}\"",
     "msg_export_generic_error": "Erro: {0}"
 }

@@ -26,7 +26,7 @@ Talvez eu não traga o suporte para MAPGEO. :p
 bl_info = {
     "name": "LeagueBlender",
     "author": "ReverseCall",
-    "version": (0, 4, 0),
+    "version": (0, 4, 1),
     "blender": (5, 0, 0),
     "location": "File > Import / File > Export",
     "description": "Imports and exports the formats supported by League Of Legends",
